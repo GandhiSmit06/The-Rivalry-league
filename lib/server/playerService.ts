@@ -25,6 +25,7 @@ export async function createPlayer(data: {
     number: playerNumber,
     name: data.name.trim(),
     base: Number(data.base) || 500,
+    role: data.role?.trim() || undefined,
     status: 'Upcoming',
     initials: computeInitials(data.name)
   }
@@ -47,6 +48,7 @@ export async function bulkImportPlayers(
       number: assignedNumber,
       name: p.name?.trim() || `Player #${assignedNumber}`,
       base: Number(p.base) || 500,
+      role: p.role?.trim() || undefined,
       status: 'Upcoming',
       initials: computeInitials(p.name || 'PL')
     }
@@ -120,6 +122,7 @@ export async function deletePlayer(id: number): Promise<{ success: boolean; mess
     db.auctionState.currentBid = 0
     db.auctionState.leaderTeamId = null
     db.auctionState.leaderTeamName = null
+    delete db.auctionState.spin
   }
 
   await writeDb(db)

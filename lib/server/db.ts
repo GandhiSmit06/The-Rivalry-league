@@ -26,6 +26,14 @@ export type Team = {
   spent: number
   players: number
   tagline: string
+  logo?: string // small data URL uploaded by the team owner
+}
+
+export type InningsScore = {
+  runs: number
+  wickets: number
+  balls: number // legal balls faced (7.3 overs = 45)
+  allOut: boolean
 }
 
 export type Match = {
@@ -41,6 +49,11 @@ export type Match = {
   tossWinner?: string
   tossDecision?: 'Bat' | 'Bowl'
   result?: string
+  oversLimit?: number
+  scoreA?: InningsScore
+  scoreB?: InningsScore
+  winner?: string // winning team name; empty for tie / no result
+  resultType?: 'win' | 'tie' | 'no-result'
 }
 
 export type AuctionState = {
@@ -49,11 +62,13 @@ export type AuctionState = {
   leaderTeamId: string | null
   leaderTeamName: string | null
   lastUpdated: string
+  spin?: { startedAt: number; poolIds: number[]; landIndex: number; unsoldRound: boolean } // the latest wheel draw
 }
 
 export type DatabaseSchema = {
   auctioneer: {
-    pin: string
+    pin?: string // only in older data; replaced by pinHash on the next sign-in
+    pinHash?: string
     name: string
   }
   league: {
@@ -66,6 +81,15 @@ export type DatabaseSchema = {
   players: Player[]
   matches: Match[]
   auctionState: AuctionState
+  ownerLogins?: Record<string, { loginId: string; pinHash: string }> // keyed by team id, never sent to clients
+  rev?: number // bumped on every write so concurrent writers cannot overwrite each other
+}
+
+/** Another request saved first. The caller should re-read and try again. */
+export class DbConflictError extends Error {
+  constructor() {
+    super('The auction changed at the same moment - please try again')
+  }
 }
 
 const DB_DIR = path.join(process.cwd(), 'data')
@@ -100,7 +124,7 @@ const initialData: DatabaseSchema = {
 let sqlClient: ReturnType<typeof neon> | null = null
 let isNeonInitialized = false
 
-function getSqlClient() {
+export function getSqlClient() {
   const dbUrl = process.env.DATABASE_URL
   if (!dbUrl) return null
   if (!sqlClient) {
@@ -122,9 +146,9 @@ async function ensureNeonDb(sql: ReturnType<typeof neon>): Promise<void> {
   `
 
   // Check if initial row exists
-  const rows = await sql`
+  const rows = (await sql`
     SELECT id FROM auction_store WHERE id = 'default' LIMIT 1;
-  `
+  `) as Array<Record<string, any>>
 
   if (rows.length === 0) {
     // Seed initial row from local auction-db.json if available
@@ -185,9 +209,9 @@ export async function readDb(): Promise<DatabaseSchema> {
   if (sql) {
     try {
       await ensureNeonDb(sql)
-      const rows = await sql`
+      const rows = (await sql`
         SELECT data FROM auction_store WHERE id = 'default' LIMIT 1;
-      `
+      `) as Array<Record<string, any>>
       if (rows && rows.length > 0 && rows[0].data) {
         const data = rows[0].data as DatabaseSchema
         if (!data.league?.name || data.league.name === 'Sunday Premier Auction') {
@@ -206,6 +230,7 @@ export async function readDb(): Promise<DatabaseSchema> {
         return data
       }
     } catch (err) {
+      if (process.env.VERCEL) throw err
       console.error('[Neon Postgres Read Warning, falling back to local file]:', err)
     }
   }
@@ -215,16 +240,22 @@ export async function readDb(): Promise<DatabaseSchema> {
 export async function writeDb(data: DatabaseSchema): Promise<void> {
   const sql = getSqlClient()
   if (sql) {
+    const baseRev = data.rev ?? 0
+    data.rev = baseRev + 1
     try {
       await ensureNeonDb(sql)
-      await sql`
-        INSERT INTO auction_store (id, data, updated_at)
-        VALUES ('default', ${JSON.stringify(data)}::jsonb, NOW())
-        ON CONFLICT (id) DO UPDATE
-        SET data = EXCLUDED.data, updated_at = NOW();
-      `
+      // Only applies if nobody else saved since this copy was read
+      const rows = (await sql`
+        UPDATE auction_store
+        SET data = ${JSON.stringify(data)}::jsonb, updated_at = NOW()
+        WHERE id = 'default' AND COALESCE((data->>'rev')::int, 0) = ${baseRev}
+        RETURNING id;
+      `) as Array<Record<string, any>>
+      if (rows.length === 0) throw new DbConflictError()
       return
     } catch (err) {
+      data.rev = baseRev
+      if (err instanceof DbConflictError || process.env.VERCEL) throw err
       console.error('[Neon Postgres Write Warning, saving locally]:', err)
     }
   }

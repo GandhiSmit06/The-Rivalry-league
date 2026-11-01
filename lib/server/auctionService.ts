@@ -1,4 +1,16 @@
-import { readDb, writeDb, AuctionState, Player, Team } from './db'
+import { readDb, writeDb, AuctionState, DatabaseSchema, DbConflictError, Player, Team } from './db'
+import { maxBidFor, WHEEL_REVEAL_PAUSE_MS, WHEEL_SPIN_MS } from '@/lib/shared/rules'
+
+/** Gives a sold player's price and squad slot back to the team that bought them. */
+function refundSale(db: DatabaseSchema, player: Player) {
+  if (player.status !== 'Sold' || !player.soldTo) return
+  const team = db.teams.find(t => t.name === player.soldTo)
+  if (!team) return
+  const price = player.soldPrice || 0
+  team.purse += price
+  team.spent = Math.max(0, team.spent - price)
+  team.players = Math.max(0, team.players - 1)
+}
 
 export async function getAuctionSnapshot(): Promise<{
   auctionState: AuctionState
@@ -6,21 +18,52 @@ export async function getAuctionSnapshot(): Promise<{
   leader: Team | null
   teams: Team[]
   players: Player[]
+  spin: LiveSpin | null
 }> {
   const db = await readDb()
-  const current = db.players.find(p => p.id === db.auctionState.currentPlayerId) || null
-  const leader = db.teams.find(t => t.name === db.auctionState.leaderTeamName) || null
+  const { spin, ...state } = db.auctionState
 
-  return {
-    auctionState: db.auctionState,
-    current,
-    leader,
-    teams: db.teams,
-    players: db.players
+  // While the wheel turns, nobody's screen shows who it will stop on
+  if (spin && isSpinning(db.auctionState)) {
+    return {
+      auctionState: { ...state, currentPlayerId: null, currentBid: 0, leaderTeamId: null, leaderTeamName: null },
+      current: null,
+      leader: null,
+      teams: db.teams,
+      players: db.players,
+      spin: {
+        id: spin.startedAt,
+        poolIds: spin.poolIds,
+        landIndex: spin.landIndex,
+        unsoldRound: spin.unsoldRound,
+        elapsedMs: Math.max(0, Date.now() - spin.startedAt),
+        durationMs: WHEEL_SPIN_MS
+      }
+    }
   }
+
+  const current = db.players.find(p => p.id === state.currentPlayerId) || null
+  const leader = db.teams.find(t => t.name === state.leaderTeamName) || null
+
+  return { auctionState: state, current, leader, teams: db.teams, players: db.players, spin: null }
 }
 
-export async function spinWheel(): Promise<{
+export type LiveSpin = {
+  id: number
+  poolIds: number[]
+  landIndex: number
+  unsoldRound: boolean
+  elapsedMs: number
+  durationMs: number
+}
+
+function isSpinning(state: AuctionState): boolean {
+  return !!state.spin && Date.now() - state.spin.startedAt < WHEEL_SPIN_MS + WHEEL_REVEAL_PAUSE_MS
+}
+
+export type WheelScope = 'auto' | 'upcoming' | 'unsold' | 'all'
+
+export async function spinWheel(scope: WheelScope = 'auto'): Promise<{
   success: boolean
   player?: Player
   auctionState?: AuctionState
@@ -34,12 +77,25 @@ export async function spinWheel(): Promise<{
   let candidatePool = upcoming
   let isUnsoldRound = false
 
+  if (scope === 'all') {
+    candidatePool = db.players
+  } else if (scope === 'unsold') {
+    candidatePool = unsold
+    isUnsoldRound = true
+  } else if (scope === 'auto' && candidatePool.length === 0 && unsold.length > 0) {
+    candidatePool = unsold
+    isUnsoldRound = true
+  }
+
   if (candidatePool.length === 0) {
-    if (unsold.length > 0) {
-      candidatePool = unsold
-      isUnsoldRound = true
-    } else {
-      return { success: false, message: 'All players processed! No upcoming or unsold players remaining in pool.' }
+    return {
+      success: false,
+      message:
+        scope === 'all'
+          ? 'No players registered yet.'
+          : scope === 'unsold'
+          ? 'No unsold players in the pool.'
+          : 'All players processed! No upcoming or unsold players remaining in pool.'
     }
   }
 
@@ -49,7 +105,13 @@ export async function spinWheel(): Promise<{
     currentBid: randomPlayer.base || 500,
     leaderTeamId: null,
     leaderTeamName: null,
-    lastUpdated: new Date().toISOString()
+    lastUpdated: new Date().toISOString(),
+    spin: {
+      startedAt: Date.now(),
+      poolIds: candidatePool.map(p => p.id),
+      landIndex: candidatePool.indexOf(randomPlayer),
+      unsoldRound: isUnsoldRound
+    }
   }
 
   await writeDb(db)
@@ -117,18 +179,32 @@ export async function nominatePlayer(playerId: number): Promise<{
   }
 }
 
+type BidResult = { success: boolean; auctionState?: AuctionState; message: string }
+
+/** Pass `increment` to bid relative to the live price, so a slightly stale screen still bids correctly. */
 export async function placeBid(
   teamName: string,
-  amount: number
-): Promise<{
-  success: boolean
-  auctionState?: AuctionState
-  message: string
-}> {
+  amount: number,
+  increment?: number
+): Promise<BidResult> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await tryBid(teamName, amount, increment)
+    } catch (err) {
+      if (!(err instanceof DbConflictError)) throw err
+    }
+  }
+  return { success: false, message: 'Too many bids at once - please bid again' }
+}
+
+async function tryBid(teamName: string, amount: number, increment?: number): Promise<BidResult> {
   const db = await readDb()
   const current = db.players.find(p => p.id === db.auctionState.currentPlayerId)
   if (!current) {
     return { success: false, message: 'No player currently on auction' }
+  }
+  if (isSpinning(db.auctionState)) {
+    return { success: false, message: 'The wheel is still spinning' }
   }
 
   const team = db.teams.find(t => t.name === teamName || t.id === teamName)
@@ -144,12 +220,31 @@ export async function placeBid(
     }
   }
 
-  const bidAmount = Number(amount)
+  if (db.auctionState.leaderTeamId === team.id) {
+    return { success: false, message: `${team.name} already holds the top bid` }
+  }
+
+  const bidAmount = increment ? (db.auctionState.currentBid || 0) + increment : Number(amount)
+  if (!Number.isFinite(bidAmount) || bidAmount <= 0) {
+    return { success: false, message: 'Please enter a valid bid amount' }
+  }
+  const currentBid = db.auctionState.currentBid || 0
+  if (db.auctionState.leaderTeamId ? bidAmount <= currentBid : bidAmount < currentBid) {
+    return {
+      success: false,
+      message: `Bid must be ${db.auctionState.leaderTeamId ? 'higher than' : 'at least'} ₹${currentBid.toLocaleString()}`
+    }
+  }
   if (bidAmount > team.purse) {
     return {
       success: false,
       message: `${team.name} has insufficient purse (₹${team.purse.toLocaleString()} available)`
     }
+  }
+
+  const maxBid = maxBidFor(team, maxSquad)
+  if (bidAmount > maxBid) {
+    return { success: false, message: `${team.name} can bid up to ₹${maxBid.toLocaleString()} and still fill its squad` }
   }
 
   db.auctionState.currentBid = bidAmount
@@ -168,7 +263,8 @@ export async function placeBid(
 export async function sellPlayer(
   teamName: string,
   price?: number,
-  playerId?: number
+  playerId?: number,
+  seenBid?: number // the bid on the seller's screen, so a newer bid is never sold over
 ): Promise<{
   success: boolean
   player?: Player
@@ -190,6 +286,14 @@ export async function sellPlayer(
     return { success: false, message: 'Player not found' }
   }
 
+  const live = targetPlayer.id === db.auctionState.currentPlayerId
+  if (live && seenBid !== undefined && Number(seenBid) !== db.auctionState.currentBid) {
+    return {
+      success: false,
+      message: `New bid: ₹${db.auctionState.currentBid.toLocaleString()} by ${db.auctionState.leaderTeamName || 'a team'}. Check it and sell again.`
+    }
+  }
+
   const winningTeamName = teamName || db.auctionState.leaderTeamName
   if (!winningTeamName) {
     return { success: false, message: 'Please select which team this player went into' }
@@ -206,18 +310,7 @@ export async function sellPlayer(
   }
 
   // If re-selling a player, refund previous team
-  if (targetPlayer.status === 'Sold' && targetPlayer.soldTo) {
-    const prevTeam = db.teams.find(t => t.name === targetPlayer.soldTo)
-    if (prevTeam && prevTeam.id !== team.id) {
-      prevTeam.purse += targetPlayer.soldPrice || 0
-      prevTeam.spent = Math.max(0, prevTeam.spent - (targetPlayer.soldPrice || 0))
-      prevTeam.players = Math.max(0, prevTeam.players - 1)
-    } else if (prevTeam && prevTeam.id === team.id) {
-      team.purse += targetPlayer.soldPrice || 0
-      team.spent = Math.max(0, team.spent - (targetPlayer.soldPrice || 0))
-      team.players = Math.max(0, team.players - 1)
-    }
-  }
+  refundSale(db, targetPlayer)
 
   const maxSquad = db.league.maxSquadSize || 11
   if (team.players >= maxSquad) {
@@ -232,6 +325,11 @@ export async function sellPlayer(
       success: false,
       message: `${team.name} only has ₹${team.purse.toLocaleString()} purse available`
     }
+  }
+
+  const maxBid = maxBidFor(team, maxSquad)
+  if (finalPrice > maxBid) {
+    return { success: false, message: `${team.name} can pay up to ₹${maxBid.toLocaleString()} and still fill its squad` }
   }
 
   targetPlayer.status = 'Sold'
@@ -275,6 +373,7 @@ export async function markUnsold(): Promise<{
     return { success: false, message: 'No player currently on auction to mark unsold' }
   }
 
+  refundSale(db, current)
   current.status = 'Unsold'
   current.soldTo = undefined
   current.soldPrice = undefined
@@ -302,7 +401,6 @@ export async function resetAuction(): Promise<{
   teams: Team[]
 }> {
   const db = await readDb()
-  const defaultPurse = db.league?.defaultPurse || 20000
 
   db.players.forEach(p => {
     p.status = 'Upcoming'
@@ -311,7 +409,7 @@ export async function resetAuction(): Promise<{
   })
 
   db.teams.forEach(t => {
-    t.purse = defaultPurse
+    t.purse += t.spent // gives back what was spent, so a team's own purse size survives
     t.spent = 0
     t.players = 0
   })

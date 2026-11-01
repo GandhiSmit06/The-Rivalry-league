@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { Plus, X } from 'lucide-react'
+import { PLAYER_ROLES } from '@/lib/shared/roles'
 
 export function AddPlayerModal({
   onClose,
@@ -9,18 +10,20 @@ export function AddPlayerModal({
   nextNumber
 }: {
   onClose: () => void
-  onAdd: (player: { name: string; base: number }) => void
+  onAdd: (player: { name: string; base: number; role?: string }) => void
   nextNumber: number
 }) {
   const [name, setName] = useState('')
   const [base, setBase] = useState(500)
+  const [role, setRole] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
     onAdd({
       name: name.trim(),
-      base: base || 500
+      base: base || 500,
+      role: role || undefined
     })
   }
 
@@ -29,7 +32,7 @@ export function AddPlayerModal({
       <div className="setup-modal" style={{ maxWidth: '440px' }}>
         <div className="modal-head">
           <div>
-            <span className="section-kicker">AUCTIONEER DESK · PLAYER #{nextNumber}</span>
+            <span className="section-kicker">SUPERADMIN · PLAYER #{nextNumber}</span>
             <h2>Register <em>Player #{nextNumber}.</em></h2>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>
@@ -46,6 +49,13 @@ export function AddPlayerModal({
             />
           </label>
 
+          <label>
+            ROLE (OPTIONAL)
+            <select value={role} onChange={e => setRole(e.target.value)}>
+              <option value="">Not set</option>
+              {PLAYER_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
           <label>
             BASE PRICE (₹)
             <input

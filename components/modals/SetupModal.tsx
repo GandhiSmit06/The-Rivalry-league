@@ -18,7 +18,7 @@ export function SetupModal({
   maxSquadSize: number
   onClose: () => void
   onSave: (settings: { name: string; season: string; defaultPurse: number; maxSquadSize: number }) => void
-  onChangePin: (currentPin: string, newPin: string) => Promise<boolean>
+  onChangePin: (currentPin: string, newPin: string) => Promise<string | null>
 }) {
   const [name, setName] = useState(leagueName)
   const [sea, setSea] = useState(season)
@@ -28,7 +28,9 @@ export function SetupModal({
   // PIN Changer State
   const [currentPin, setCurrentPin] = useState('')
   const [newPin, setNewPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
   const [pinMsg, setPinMsg] = useState('')
+  const [pinOk, setPinOk] = useState(false)
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,14 +45,21 @@ export function SetupModal({
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setPinMsg('')
-    const ok = await onChangePin(currentPin, newPin)
-    if (ok) {
-      setPinMsg('PIN successfully updated!')
-      setCurrentPin('')
-      setNewPin('')
-    } else {
-      setPinMsg('Failed to update PIN. Check current PIN.')
+    setPinOk(false)
+    if (newPin !== confirmPin) {
+      setPinMsg('The two new passwords do not match')
+      return
     }
+    const failure = await onChangePin(currentPin, newPin)
+    if (failure) {
+      setPinMsg(failure)
+      return
+    }
+    setPinOk(true)
+    setPinMsg('Password updated. Use the new one next time you sign in.')
+    setCurrentPin('')
+    setNewPin('')
+    setConfirmPin('')
   }
 
   return (
@@ -104,40 +113,48 @@ export function SetupModal({
           </button>
         </form>
 
-        {/* Change Auctioneer PIN Form */}
+        {/* Change superadmin password */}
         <div style={{ marginTop: '24px', borderTop: '1px solid var(--line)', paddingTop: '16px' }}>
           <span className="section-kicker" style={{ color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <KeyRound size={12} /> CHANGE AUCTIONEER PIN
+            <KeyRound size={12} /> CHANGE SUPERADMIN PASSWORD
           </span>
-          <form onSubmit={handlePinSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', marginTop: '10px', alignItems: 'end' }}>
+          <form onSubmit={handlePinSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
             <label style={{ margin: 0 }}>
-              CURRENT PIN
+              CURRENT PASSWORD
               <input
                 type="password"
-                maxLength={6}
                 value={currentPin}
                 onChange={e => setCurrentPin(e.target.value)}
-                placeholder="••••"
+                autoComplete="current-password"
                 required
               />
             </label>
-            <label style={{ margin: 0 }}>
-              NEW PIN
-              <input
-                type="password"
-                maxLength={6}
-                value={newPin}
-                onChange={e => setNewPin(e.target.value)}
-                placeholder="••••"
-                required
-              />
-            </label>
-            <button type="submit" className="ghost-btn" style={{ padding: '10px 14px', height: '40px' }}>
-              Update
-            </button>
+            <div className="field-row" style={{ marginTop: 0 }}>
+              <label style={{ margin: 0 }}>
+                NEW PASSWORD (6+)
+                <input
+                  type="password"
+                  value={newPin}
+                  onChange={e => setNewPin(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+              <label style={{ margin: 0 }}>
+                REPEAT NEW
+                <input
+                  type="password"
+                  value={confirmPin}
+                  onChange={e => setConfirmPin(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+            </div>
+            <button type="submit" className="ghost-btn">Update Password</button>
           </form>
           {pinMsg && (
-            <small style={{ display: 'block', marginTop: '6px', color: pinMsg.includes('success') ? 'var(--green)' : 'var(--red)', fontSize: '11px', fontWeight: 600 }}>
+            <small style={{ display: 'block', marginTop: '6px', color: pinOk ? 'var(--green)' : 'var(--red)', fontSize: '12px', fontWeight: 600 }}>
               {pinMsg}
             </small>
           )}

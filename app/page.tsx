@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { Player, Team, Match } from '@/lib/server/db'
 import {
   apiAuth,
@@ -8,22 +8,31 @@ import {
   apiTeams,
   apiPlayers,
   apiAuction,
-  apiMatches
+  apiMatches,
+  apiOwner,
+  type LiveSpin,
+  type OwnerDetails,
+  getAuthToken,
+  getOwnerTeamId,
+  setAuthToken,
+  setOwnerToken
 } from '@/lib/client/api'
 import { sounds } from '@/lib/client/sound'
 
 // Layout & Common Components
 import { Topbar } from '@/components/layout/Topbar'
 import { Toast } from '@/components/common/Toast'
-import { CricketAnimatedBackground } from '@/components/layout/CricketAnimatedBackground'
 
 // Views
 import { HomeView } from '@/components/views/HomeView'
-import { AuctionView } from '@/components/views/AuctionView'
+import { AuctionView, type WheelScope } from '@/components/views/AuctionView'
+import { WHEEL_REVEAL_PAUSE_MS, WHEEL_SPIN_MS } from '@/lib/shared/rules'
+import { SpectatorView } from '@/components/views/SpectatorView'
 import { TeamsView } from '@/components/views/TeamsView'
 import { PlayersView } from '@/components/views/PlayersView'
 import { ScheduleView } from '@/components/views/ScheduleView'
 import { ResultsView } from '@/components/views/ResultsView'
+import { StandingsView } from '@/components/views/StandingsView'
 
 // Modals
 import { AuthModal } from '@/components/modals/AuthModal'
@@ -34,6 +43,8 @@ import { AddTeamModal } from '@/components/modals/AddTeamModal'
 import { AdjustBudgetModal } from '@/components/modals/AdjustBudgetModal'
 import { AddMatchModal } from '@/components/modals/AddMatchModal'
 import { TossModal } from '@/components/modals/TossModal'
+import { ResultModal } from '@/components/modals/ResultModal'
+import { OwnerLoginModal } from '@/components/modals/OwnerLoginModal'
 import { SetupModal } from '@/components/modals/SetupModal'
 
 export default function Page() {
@@ -46,6 +57,8 @@ export default function Page() {
   const [bid, setBid] = useState(0)
   const [leader, setLeader] = useState<Team | null>(null)
   const [isSpinning, setIsSpinning] = useState(false)
+  const [drawnPlayerId, setDrawnPlayerId] = useState<number | null>(null)
+  const [liveSpin, setLiveSpin] = useState<LiveSpin | null>(null)
   const [isMuted, setIsMuted] = useState(false)
   const [toast, setToast] = useState('')
   const [search, setSearch] = useState('')
@@ -53,15 +66,17 @@ export default function Page() {
   const [scheduleFilter, setScheduleFilter] = useState('ALL')
 
   // League Metadata State
-  const [leagueName, setLeagueName] = useState('Sunday Premier Auction')
+  const [wheelScope, setWheelScope] = useState<WheelScope>('auto')
+  const [leagueName, setLeagueName] = useState('The Rivalry League')
   const [season, setSeason] = useState('01')
   const [defaultPurse, setDefaultPurse] = useState(20000)
   const [maxSquadSize, setMaxSquadSize] = useState(11)
 
   // Auctioneer Master Auth State
-  const [isAuctioneer, setIsAuctioneer] = useState(true)
+  const [isAuctioneer, setIsAuctioneer] = useState(false)
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authError, setAuthError] = useState('')
+  const [ownerTeamId, setOwnerTeamId] = useState<string | null>(null)
 
   // Modal Visibility State
   const [setupOpen, setSetupOpen] = useState(false)
@@ -71,6 +86,8 @@ export default function Page() {
   const [budgetModalTeam, setBudgetModalTeam] = useState<Team | null>(null)
   const [addMatchModalOpen, setAddMatchModalOpen] = useState(false)
   const [tossModalMatch, setTossModalMatch] = useState<Match | null>(null)
+  const [resultModalMatch, setResultModalMatch] = useState<Match | null>(null)
+  const [ownerLoginTeam, setOwnerLoginTeam] = useState<Team | null>(null)
   const [directSellPlayer, setDirectSellPlayer] = useState<Player | null>(null)
   const [directSellModalOpen, setDirectSellModalOpen] = useState(false)
 
@@ -78,35 +95,61 @@ export default function Page() {
   const [awardTeam, setAwardTeam] = useState<string>('')
   const [awardPrice, setAwardPrice] = useState<number>(500)
 
+  const ownerTeam = teams.find(t => t.id === ownerTeamId) || null
+
   // Next sequential player number calculation
   const nextPlayerNumber = useMemo(() => {
     return players.reduce((max, p) => Math.max(max, p.number || 0), 0) + 1
   }, [players])
 
+  const toastTimer = useRef<number | undefined>(undefined)
+  const lastSync = useRef('')
+  const lastAuctionSync = useRef('')
+
   const notify = (msg: string) => {
     setToast(msg)
-    window.setTimeout(() => setToast(''), 2800)
+    window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(''), 3200)
   }
 
   // Load and synchronize state from backend
+  const loadAuction = useCallback(async () => {
+    try {
+      const { spin, ...auctionData } = await apiAuction.getState()
+      if (!auctionData.success) return
+
+      const incoming = spin ?? null
+      setLiveSpin(prev => (prev?.id === incoming?.id ? prev : incoming))
+
+      // Skip re-render (and clobbering of in-progress inputs) when nothing changed
+      const signature = JSON.stringify(auctionData)
+      if (signature === lastAuctionSync.current) return
+      lastAuctionSync.current = signature
+
+      setPlayers(auctionData.players || [])
+      setTeams(auctionData.teams || [])
+      setCurrent(auctionData.current || null)
+      setBid(auctionData.auctionState?.currentBid || 0)
+      setLeader(auctionData.leader || null)
+      if (auctionData.current) {
+        setAwardPrice(auctionData.auctionState?.currentBid || auctionData.current.base || 500)
+      }
+    } catch (e) {
+      console.error('Failed to sync the auction:', e)
+    }
+  }, [])
+
   const loadState = useCallback(async () => {
     try {
-      const [auctionData, matchData, leagueData] = await Promise.all([
-        apiAuction.getState(),
+      const [, matchData, leagueData] = await Promise.all([
+        loadAuction(),
         apiMatches.getAll(),
         apiLeague.getSettings()
       ])
 
-      if (auctionData.success) {
-        setPlayers(auctionData.players || [])
-        setTeams(auctionData.teams || [])
-        setCurrent(auctionData.current || null)
-        setBid(auctionData.auctionState?.currentBid || 0)
-        setLeader(auctionData.leader || null)
-        if (auctionData.current) {
-          setAwardPrice(auctionData.auctionState?.currentBid || auctionData.current.base || 500)
-        }
-      }
+      const signature = JSON.stringify([matchData, leagueData])
+      if (signature === lastSync.current) return
+      lastSync.current = signature
 
       if (matchData.success) {
         setMatches(matchData.matches || [])
@@ -121,7 +164,7 @@ export default function Page() {
     } catch (e) {
       console.error('Failed to sync backend state:', e)
     }
-  }, [])
+  }, [loadAuction])
 
   useEffect(() => {
     loadState()
@@ -140,42 +183,153 @@ export default function Page() {
     }
   }, [current, bid, leader, teams, awardTeam])
 
+  const anyModalOpen =
+    authModalOpen || setupOpen || teamModalOpen || playerModalOpen || bulkModalOpen ||
+    addMatchModalOpen || directSellModalOpen || !!budgetModalTeam || !!tossModalMatch || !!resultModalMatch || !!ownerLoginTeam
+
+  // Live auto-sync so a second screen (projector / spectators) follows the auction
+  const watchingAuction = page === 'auction' && !isAuctioneer
+  const auctionSyncMs = liveSpin ? 700 : current ? 2000 : watchingAuction ? 1500 : 4000 // catches a spin as it starts
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (!document.hidden && !anyModalOpen && !isSpinning) loadAuction()
+    }, auctionSyncMs)
+    return () => window.clearInterval(id)
+  }, [loadAuction, anyModalOpen, isSpinning, auctionSyncMs])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (!document.hidden && !anyModalOpen && !isSpinning) loadState()
+    }, 6000)
+    return () => window.clearInterval(id)
+  }, [loadState, anyModalOpen, isSpinning])
+
   // Auctioneer Gatekeeper Check
   const guardAuctioneer = (action: () => void) => {
     if (!isAuctioneer) {
       setAuthModalOpen(true)
-      notify('Auctioneer authorization required')
+      notify('Superadmin sign-in required')
       return
     }
     action()
+  }
+
+  // Restore a still-valid session on load; fall back to spectator when it expires
+  useEffect(() => {
+    if (getAuthToken()) setIsAuctioneer(true)
+    setOwnerTeamId(getOwnerTeamId())
+    const onExpired = () => {
+      setIsAuctioneer(!!getAuthToken())
+      setOwnerTeamId(getOwnerTeamId())
+      setToast('Session expired - please sign in again')
+    }
+    window.addEventListener('trl-auth-expired', onExpired)
+    return () => window.removeEventListener('trl-auth-expired', onExpired)
+  }, [])
+
+  const handleSetAuctioneer = (value: boolean) => {
+    if (!value) setAuthToken(null)
+    setIsAuctioneer(value)
   }
 
   const handleVerifyPin = async (pin: string) => {
     setAuthError('')
     try {
       const res = await apiAuth.verifyPin(pin)
-      if (res.success) {
+      if (res.success && res.token) {
+        setAuthToken(res.token)
         setIsAuctioneer(true)
         setAuthModalOpen(false)
-        notify('Auctioneer mode unlocked')
+        notify(res.defaultPin ? 'Unlocked - change the default password in Settings!' : 'Signed in as superadmin')
       } else {
-        setAuthError(res.message || 'Incorrect PIN')
+        setAuthError(res.message || 'Wrong password')
       }
     } catch {
-      setAuthError('Error verifying PIN')
+      setAuthError('Could not reach the server')
     }
   }
 
-  const handleChangePin = async (currentPin: string, newPin: string): Promise<boolean> => {
+  const handleOwnerLogin = async (loginId: string, pin: string) => {
+    setAuthError('')
+    try {
+      const res = await apiOwner.login(loginId, pin)
+      if (res.success && res.token) {
+        setOwnerToken(res.token)
+        setOwnerTeamId(res.teamId || null)
+        setAuthModalOpen(false)
+        setPage('auction')
+        notify('Signed in as team owner')
+      } else {
+        setAuthError(res.message || 'Wrong login ID or password')
+      }
+    } catch {
+      setAuthError('Could not sign in')
+    }
+  }
+
+  const handleOwnerLogout = () => {
+    setOwnerToken(null)
+    setOwnerTeamId(null)
+    notify('Signed out')
+  }
+
+  const handleOwnerBid = async (increment: number) => {
+    try {
+      const data = await apiOwner.bid(increment)
+      if (data.success) sounds.playHammer()
+      notify(data.message)
+    } catch {
+      notify('Failed to place bid')
+    } finally {
+      loadState()
+    }
+  }
+
+  const handleUploadLogo = async (logo: string) => {
+    if (!ownerTeamId) return
+    try {
+      const data = await apiOwner.uploadLogo(ownerTeamId, logo)
+      notify(data.message)
+    } catch {
+      notify('Failed to upload logo')
+    } finally {
+      loadState()
+    }
+  }
+
+  const handleRemoveLogo = async () => {
+    if (!ownerTeamId) return
+    try {
+      const data = await apiOwner.removeLogo(ownerTeamId)
+      notify(data.message)
+    } catch {
+      notify('Failed to remove logo')
+    } finally {
+      loadState()
+    }
+  }
+
+  const handleSaveOwnerLogin = async (teamId: string, details: OwnerDetails): Promise<string | null> => {
+    try {
+      const data = await apiOwner.setLogin(teamId, details)
+      if (!data.success) return data.message || 'Could not save the owner'
+      setAwardTeam('') // the selected team may just have been renamed
+      loadState()
+      return null
+    } catch {
+      return 'Could not save the owner'
+    }
+  }
+
+  const handleChangePin = async (currentPin: string, newPin: string): Promise<string | null> => {
     try {
       const res = await apiAuth.changePin(currentPin, newPin)
-      if (res.success) {
-        notify('PIN changed successfully')
-        return true
-      }
-      return false
+      if (!res.success) return res.message || 'Could not change the password'
+      notify('Superadmin password changed')
+      return null
     } catch {
-      return false
+      return 'Could not reach the server'
     }
   }
 
@@ -192,9 +346,7 @@ export default function Page() {
       setSeason(newSeason)
       try {
         const res = await apiLeague.updateSettings({ season: newSeason })
-        if (res.success) {
-          notify(`Active tournament set to Season ${newSeason}`)
-        }
+        notify(res.success ? `Active tournament set to Season ${newSeason}` : res.message || 'Could not update season')
       } catch {
         notify('Failed to update season')
       } finally {
@@ -208,9 +360,7 @@ export default function Page() {
       setMaxSquadSize(newLimit)
       try {
         const res = await apiLeague.updateSettings({ maxSquadSize: newLimit })
-        if (res.success) {
-          notify(`Squad capacity set to ${newLimit} players/team`)
-        }
+        notify(res.success ? `Squad capacity set to ${newLimit} players/team` : res.message || 'Could not update squad limit')
       } catch {
         notify('Failed to update squad limit')
       } finally {
@@ -231,6 +381,8 @@ export default function Page() {
         if (res.success) {
           notify('League settings saved')
           setSetupOpen(false)
+        } else {
+          notify(res.message || 'Could not save settings')
         }
       } catch {
         notify('Failed to save settings')
@@ -261,40 +413,46 @@ export default function Page() {
   // Auction Room Operations
   const handleSpin = () => {
     guardAuctioneer(async () => {
-      const upcoming = players.filter(p => p.status === 'Upcoming')
-      const unsold = players.filter(p => p.status === 'Unsold')
-      if (isSpinning || (!upcoming.length && !unsold.length)) return
+      if (isSpinning || current) return
       setIsSpinning(true)
       sounds.playSpinnerTick()
       setCurrent(null)
       setLeader(null)
       setBid(0)
 
-      window.setTimeout(async () => {
-        try {
-          const data = await apiAuction.spin()
-          if (data.success) {
-            setCurrent(data.player)
-            const initialBase = data.player.base || 500
-            setBid(initialBase)
-            setAwardPrice(initialBase)
-            if (teams.length > 0) setAwardTeam(teams[0].name)
-            sounds.playHammer()
-            notify(
-              data.isUnsoldRound
-                ? `[RE-AUCTION ROUND] Unsold Player #${data.player.number} (${data.player.name}) drawn on the block!`
-                : `Player #${data.player.number} (${data.player.name}) drawn on the block!`
-            )
-          } else {
-            notify(data.message)
-          }
-        } catch {
-          notify('Failed to draw from wheel')
-        } finally {
-          setIsSpinning(false)
-          loadState()
+      const finish = () => {
+        setDrawnPlayerId(null)
+        setIsSpinning(false)
+        loadState()
+      }
+
+      try {
+        // The server picks first, so the wheel can land on the player it really drew
+        const data = await apiAuction.spin(wheelScope)
+        if (!data.success) {
+          notify(data.message)
+          finish()
+          return
         }
-      }, 1800)
+        setDrawnPlayerId(data.player.id)
+        window.setTimeout(() => {
+          setCurrent(data.player)
+          const initialBase = data.player.base || 500
+          setBid(initialBase)
+          setAwardPrice(initialBase)
+          if (teams.length > 0) setAwardTeam(teams[0].name)
+          sounds.playHammer()
+          notify(
+            data.isUnsoldRound
+              ? `[RE-AUCTION ROUND] Unsold Player #${data.player.number} (${data.player.name}) drawn on the block!`
+              : `Player #${data.player.number} (${data.player.name}) drawn on the block!`
+          )
+          finish()
+        }, WHEEL_SPIN_MS + WHEEL_REVEAL_PAUSE_MS)
+      } catch {
+        notify('Failed to draw from wheel')
+        finish()
+      }
     })
   }
 
@@ -381,7 +539,7 @@ export default function Page() {
       }
 
       try {
-        const data = await apiAuction.sell(awardTeam, awardPrice, current.id)
+        const data = await apiAuction.sell(awardTeam, awardPrice, current.id, bid)
         if (data.success) {
           sounds.playCheer()
           notify(data.message)
@@ -441,6 +599,8 @@ export default function Page() {
           setCurrent(null)
           setLeader(null)
           setBid(0)
+        } else {
+          notify(data.message || 'Could not mark unsold')
         }
       } catch {
         notify('Failed to mark unsold')
@@ -462,6 +622,8 @@ export default function Page() {
           setCurrent(null)
           setLeader(null)
           setBid(0)
+        } else {
+          notify(data.message || 'Could not reset the auction')
         }
       } catch {
         notify('Failed to reset auction')
@@ -486,6 +648,7 @@ export default function Page() {
         if (data.success) {
           notify(`Franchise "${t.name}" registered with ₹${t.purse.toLocaleString()} purse`)
           setTeamModalOpen(false)
+          if (data.team) setOwnerLoginTeam(data.team) // new teams go straight to owner setup
         } else {
           notify(data.message || 'Error creating team')
         }
@@ -504,9 +667,7 @@ export default function Page() {
       }
       try {
         const data = await apiTeams.delete(name)
-        if (data.success) {
-          notify(`Franchise "${name}" deleted`)
-        }
+        notify(data.success ? `Franchise "${name}" deleted` : data.message || 'Could not delete team')
       } catch {
         notify('Failed to delete team')
       } finally {
@@ -537,6 +698,7 @@ export default function Page() {
   const handleAddPlayer = async (p: {
     name: string
     base: number
+    role?: string
   }) => {
     guardAuctioneer(async () => {
       try {
@@ -544,6 +706,8 @@ export default function Page() {
         if (data.success) {
           notify(`Player #${data.player?.number || nextPlayerNumber} "${p.name}" added with base price ₹${p.base || 500}`)
           setPlayerModalOpen(false)
+        } else {
+          notify(data.message || 'Could not add player')
         }
       } catch {
         notify('Error adding player')
@@ -560,14 +724,17 @@ export default function Page() {
         const parts = line.split(',').map(s => s.trim())
         return {
           name: parts[0] || 'Player',
-          base: Number(parts[1]) || 500
+          base: Number(parts[1]) || 500,
+          role: parts[2] || undefined
         }
       })
       try {
         const data = await apiPlayers.bulkImport(list)
         if (data.success) {
-          notify(`Imported ${list.length} players with base price ₹500`)
+          notify(`Imported ${list.length} players`)
           setBulkModalOpen(false)
+        } else {
+          notify((data as { message?: string }).message || 'Could not import players')
         }
       } catch {
         notify('Failed to bulk import')
@@ -579,11 +746,11 @@ export default function Page() {
 
   const handleDeletePlayer = async (id: number) => {
     guardAuctioneer(async () => {
+      const target = players.find(p => p.id === id)
+      if (!confirm(`Remove ${target?.name || 'this player'}? A sold player's price goes back to their team.`)) return
       try {
         const data = await apiPlayers.delete(id)
-        if (data.success) {
-          notify('Player removed')
-        }
+        notify(data.success ? 'Player removed' : data.message || 'Could not remove player')
       } catch {
         notify('Failed to delete player')
       } finally {
@@ -596,9 +763,7 @@ export default function Page() {
     guardAuctioneer(async () => {
       try {
         const data = await apiPlayers.update(id, { status: 'Upcoming' })
-        if (data.success) {
-          notify('Player restored to upcoming pool')
-        }
+        notify(data.success ? 'Player restored to upcoming pool' : data.message || 'Could not reopen player')
       } catch {
         notify('Failed to re-auction player')
       } finally {
@@ -622,6 +787,8 @@ export default function Page() {
         if (data.success) {
           notify(`Match fixture scheduled: ${m.teamA} vs ${m.teamB}`)
           setAddMatchModalOpen(false)
+        } else {
+          notify(data.message || 'Could not schedule match')
         }
       } catch {
         notify('Failed to schedule match')
@@ -633,6 +800,9 @@ export default function Page() {
 
   const handleGenerateRoundRobin = async () => {
     guardAuctioneer(async () => {
+      if (matches.length > 0 && !confirm(`Replace all ${matches.length} fixtures? Tosses and results entered so far will be lost.`)) {
+        return
+      }
       try {
         const data = await apiMatches.generateRoundRobin()
         if (data.success) {
@@ -650,11 +820,10 @@ export default function Page() {
 
   const handleDeleteMatch = async (id: string) => {
     guardAuctioneer(async () => {
+      if (!confirm('Delete this match? Its toss and result will be lost.')) return
       try {
         const data = await apiMatches.delete(id)
-        if (data.success) {
-          notify('Match fixture removed')
-        }
+        notify(data.success ? 'Match fixture removed' : data.message || 'Could not delete match')
       } catch {
         notify('Failed to delete fixture')
       } finally {
@@ -665,12 +834,20 @@ export default function Page() {
 
   const handleRecordToss = async (matchId: string, tossWinner: string, tossDecision: 'Bat' | 'Bowl') => {
     guardAuctioneer(async () => {
+      // A quick toss with no fixture has nothing to save
+      if (matchId === 'temp_toss') {
+        notify(`${tossWinner} won the toss and chose to ${tossDecision}`)
+        setTossModalMatch(null)
+        return
+      }
       try {
         const data = await apiMatches.recordToss(matchId, tossWinner, tossDecision)
         if (data.success) {
           sounds.playCheer()
           notify(data.message)
           setTossModalMatch(null)
+        } else {
+          notify(data.message || 'Could not record toss')
         }
       } catch {
         notify('Failed to record toss')
@@ -680,10 +857,33 @@ export default function Page() {
     })
   }
 
+  const handleRecordResult = async (
+    matchId: string,
+    payload: Parameters<typeof apiMatches.recordResult>[1]
+  ) => {
+    guardAuctioneer(async () => {
+      try {
+        const data = await apiMatches.recordResult(matchId, payload)
+        if (data.success) {
+          sounds.playCheer()
+          notify(data.message)
+          setResultModalMatch(null)
+        } else {
+          notify(data.message || 'Could not save result')
+        }
+      } catch {
+        notify('Failed to save result')
+      } finally {
+        loadState()
+      }
+    })
+  }
+
   const handleQuickToss = () => {
     guardAuctioneer(() => {
-      if (matches.length > 0) {
-        setTossModalMatch(matches[0])
+      const nextMatch = matches.find(m => m.status !== 'Completed')
+      if (nextMatch) {
+        setTossModalMatch(nextMatch)
       } else if (teams.length >= 2) {
         setTossModalMatch({
           id: 'temp_toss',
@@ -702,9 +902,29 @@ export default function Page() {
     })
   }
 
+  // Keyboard shortcuts on the Auction page: S spin, 1-9 bid for team N, Enter sell, U unsold
+  useEffect(() => {
+    if (page !== 'auction' || anyModalOpen || !isAuctioneer) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return
+      const el = e.target as HTMLElement | null
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const k = e.key.toLowerCase()
+      if (k === 'enter' && el?.tagName === 'BUTTON') return // Enter on a focused button presses that button
+      if (k === 's') { if (!current) handleSpin() }
+      else if (k === 'u') handleMarkUnsold()
+      else if (k === 'enter') handleAwardSell()
+      else if (/^[1-9]$/.test(k) && teams[Number(k) - 1]) handleBid(teams[Number(k) - 1])
+      else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   return (
     <div className="app-shell">
-      <CricketAnimatedBackground />
       <Topbar
         page={page}
         setPage={setPage}
@@ -714,7 +934,9 @@ export default function Page() {
         maxSquadSize={maxSquadSize}
         onUpdateSquadLimit={handleUpdateSquadLimit}
         isAuctioneer={isAuctioneer}
-        setIsAuctioneer={setIsAuctioneer}
+        setIsAuctioneer={handleSetAuctioneer}
+        ownerTeamName={ownerTeam?.name || null}
+        onOwnerLogout={handleOwnerLogout}
         onOpenAuth={() => setAuthModalOpen(true)}
         isMuted={isMuted}
         onToggleSound={handleToggleSound}
@@ -733,10 +955,26 @@ export default function Page() {
             onStart={() => setPage('auction')}
             onManageTeams={() => setPage('teams')}
             onManageSchedule={() => setPage('schedule')}
+            onQuickToss={handleQuickToss}
           />
         )}
 
-        {page === 'auction' && (
+        {page === 'auction' && !isAuctioneer && (
+          <SpectatorView
+            players={players}
+            teams={teams}
+            current={current}
+            bid={bid}
+            leader={leader}
+            liveSpin={liveSpin}
+            maxSquadSize={maxSquadSize}
+            ownerTeam={ownerTeam}
+            onOwnerBid={handleOwnerBid}
+            onUnlock={() => setAuthModalOpen(true)}
+          />
+        )}
+
+        {page === 'auction' && isAuctioneer && (
           <AuctionView
             players={players}
             teams={teams}
@@ -744,23 +982,22 @@ export default function Page() {
             bid={bid}
             leader={leader}
             spinning={isSpinning}
+            drawnPlayerId={drawnPlayerId}
+            wheelScope={wheelScope}
+            setWheelScope={setWheelScope}
             awardTeam={awardTeam}
             setAwardTeam={setAwardTeam}
             awardPrice={awardPrice}
             setAwardPrice={setAwardPrice}
             maxSquadSize={maxSquadSize}
-            isAuctioneer={isAuctioneer}
             spin={handleSpin}
             nominate={handleNominate}
             makeBid={handleBid}
             awardSell={handleAwardSell}
             unsold={handleMarkUnsold}
-            onBack={() => setPage('home')}
             onAddPlayer={() => guardAuctioneer(() => setPlayerModalOpen(true))}
             onAddTeam={() => guardAuctioneer(() => setTeamModalOpen(true))}
             onAdjustBudget={t => guardAuctioneer(() => setBudgetModalTeam(t))}
-            onUpdateSquadLimit={handleUpdateSquadLimit}
-            onUnlock={() => setAuthModalOpen(true)}
             onDirectSell={handleOpenDirectSell}
             onReopenAllUnsold={handleReopenAllUnsold}
           />
@@ -772,10 +1009,14 @@ export default function Page() {
             players={players}
             maxSquadSize={maxSquadSize}
             isAuctioneer={isAuctioneer}
+            ownerTeamId={ownerTeamId}
             onAddTeam={() => guardAuctioneer(() => setTeamModalOpen(true))}
             onDeleteTeam={handleDeleteTeam}
             onAdjustBudget={t => guardAuctioneer(() => setBudgetModalTeam(t))}
-            onUpdateSquadLimit={handleUpdateSquadLimit}
+            onOwnerLogin={t => guardAuctioneer(() => setOwnerLoginTeam(t))}
+            onUploadLogo={handleUploadLogo}
+            onRemoveLogo={handleRemoveLogo}
+            notify={notify}
           />
         )}
 
@@ -787,6 +1028,9 @@ export default function Page() {
             roleFilter={roleFilter}
             setRoleFilter={setRoleFilter}
             isAuctioneer={isAuctioneer}
+            maxSquadSize={maxSquadSize}
+            defaultPurse={defaultPurse}
+            onOpenAuction={() => setPage('auction')}
             onAddPlayer={() => guardAuctioneer(() => setPlayerModalOpen(true))}
             onBulkImport={() => guardAuctioneer(() => setBulkModalOpen(true))}
             onDeletePlayer={handleDeletePlayer}
@@ -797,6 +1041,20 @@ export default function Page() {
               setPage('auction')
             }}
           />
+        )}
+
+        {['schedule', 'standings', 'results'].includes(page) && (
+          <div className="segmented">
+            {[
+              { id: 'schedule', label: 'Fixtures' },
+              { id: 'standings', label: 'Leaderboard' },
+              { id: 'results', label: 'Auction Results' }
+            ].map(tab => (
+              <button key={tab.id} className={page === tab.id ? 'active' : ''} onClick={() => setPage(tab.id)}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
         )}
 
         {page === 'schedule' && (
@@ -810,9 +1068,12 @@ export default function Page() {
             onGenerateRoundRobin={handleGenerateRoundRobin}
             onDeleteMatch={handleDeleteMatch}
             onOpenToss={m => guardAuctioneer(() => setTossModalMatch(m))}
+            onOpenResult={m => guardAuctioneer(() => setResultModalMatch(m))}
             onQuickToss={handleQuickToss}
           />
         )}
+
+        {page === 'standings' && <StandingsView teams={teams} matches={matches} />}
 
         {page === 'results' && (
           <ResultsView
@@ -830,6 +1091,7 @@ export default function Page() {
         <AuthModal
           onClose={() => setAuthModalOpen(false)}
           onVerify={handleVerifyPin}
+          onOwnerLogin={handleOwnerLogin}
           error={authError}
         />
       )}
@@ -893,6 +1155,22 @@ export default function Page() {
           match={tossModalMatch}
           onClose={() => setTossModalMatch(null)}
           onRecordToss={handleRecordToss}
+        />
+      )}
+
+      {resultModalMatch && (
+        <ResultModal
+          match={resultModalMatch}
+          onClose={() => setResultModalMatch(null)}
+          onSave={handleRecordResult}
+        />
+      )}
+
+      {ownerLoginTeam && (
+        <OwnerLoginModal
+          team={ownerLoginTeam}
+          onClose={() => setOwnerLoginTeam(null)}
+          onSave={handleSaveOwnerLogin}
         />
       )}
 

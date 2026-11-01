@@ -37,7 +37,7 @@ export function AddTeamModal({
       <div className="setup-modal" style={{ maxWidth: '480px' }}>
         <div className="modal-head">
           <div>
-            <span className="section-kicker">AUCTIONEER DESK</span>
+            <span className="section-kicker">SUPERADMIN</span>
             <h2>Add <em>Franchise.</em></h2>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>

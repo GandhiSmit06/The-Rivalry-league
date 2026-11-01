@@ -1,0 +1,143 @@
+# The Rivalry League
+
+A live cricket auction and league app. The superadmin spins a wheel to draw each player, team owners bid from their own phones, and every screen follows along in real time. After the auction it runs the league too: fixtures, tosses, results and a points table with net run rate.
+
+It runs as a website on Vercel and as an Android app that loads the same site, so most updates reach phones without a reinstall.
+
+**Live site:** https://rivalryleague.vercel.app
+
+## Who can do what
+
+| Role | Sign-in | Can do |
+|---|---|---|
+| **Superadmin** | Password | Spin the wheel, sell players, manage teams, players, fixtures, results and settings, and assign owners |
+| **Team owner** | Login ID and password set by the superadmin | Bid for their own team and upload their team's logo |
+| **Viewer** | None | Watch the auction, squads, fixtures and leaderboard |
+
+Players do not have logins.
+
+## Features
+
+**Auction**
+- Spin wheel, shown live on every screen on the Auction tab. The drawn player stays hidden, and bidding stays closed, until the wheel stops
+- Wheel filters: Available, Unsold or Everyone
+- Direct nomination and direct sale from the player pool
+- Owners bid in steps of ₹100, ₹250, ₹500 or ₹1,000 from their phones
+- Live sync across screens, about every 2 seconds during bidding
+- Re-auction of sold or unsold players, with automatic refunds
+- Keyboard shortcuts on desktop: `S` spin, `1`-`9` bid for a team, `Enter` sell, `U` unsold
+
+**Auction rules enforced by the server**
+- A team cannot go over its squad limit or its purse
+- **Max bid:** a team must keep the ₹500 base price for each other open squad place, so it can always fill its squad
+- A team already leading cannot outbid itself
+- A sale is refused if a newer bid has come in since the superadmin's screen last updated
+- Simultaneous bids cannot overwrite each other
+
+**League**
+- Round-robin fixture generator and manual fixtures
+- 3D coin toss
+- Scorecard entry, including all-out, ties and no results
+- Leaderboard ranked by points, then net run rate, then wins
+
+| Result | Points |
+|---|---|
+| Win | 2 |
+| Tie | 1 each |
+| No result | 1 each |
+
+Net run rate is runs scored per over minus runs conceded per over. A side bowled out is charged its full quota of overs. Abandoned matches do not count.
+
+## How an auction runs
+
+1. The superadmin adds teams and players, then assigns each owner under **Teams → Assign owner**.
+2. Owners sign in and open the **Auction** tab.
+3. The superadmin presses **Spin**. Everyone watches the wheel.
+4. When it stops, the player appears and owners bid.
+5. The superadmin presses **Sold** or **Unsold**, then spins again.
+
+## Tech stack
+
+- [Next.js 16](https://nextjs.org) (App Router) with React 19 and TypeScript
+- [Neon](https://neon.tech) serverless Postgres
+- Hand-written CSS in `app/globals.css`, with the Space Grotesk font and lucide-react icons
+- [Capacitor](https://capacitorjs.com) for the Android app
+- Vercel for hosting and GitHub Actions for APK builds
+
+## Run it locally
+
+You need Node.js 22 or newer.
+
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:3000.
+
+Without `DATABASE_URL`, the app uses the local file `data/auction-db.json`. That file and `lib/server/db.ts` hold the default superadmin password for a new database. Change it in League Settings straight away.
+
+### Environment variables
+
+Put these in `.env.local`, which git ignores. Never commit them.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | In production | Neon Postgres connection string |
+| `AUTH_SECRET` | In production | Long random string used to sign login sessions |
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Starts the development server |
+| `npm run build` | Creates a production build |
+| `npm start` | Runs the production build |
+| `npm run migrate` | Copies `data/auction-db.json` into Neon |
+
+## Deploying
+
+1. Import the repository into Vercel.
+2. Add `DATABASE_URL` and `AUTH_SECRET` as environment variables.
+3. Deploy. Each push to `main` then deploys automatically.
+
+## Android app
+
+The app is a thin Capacitor shell around the hosted site. Website changes reach the app without a reinstall. A new APK is only needed if the app's name, icon or web address changes.
+
+1. In the GitHub repository, go to **Settings → Secrets and variables → Actions → Variables**.
+2. Add `CAP_SERVER_URL` with your hosted site's address.
+3. Each push to `main` builds an APK. You can also run **Build Android APK** from the Actions tab.
+4. Download `rivalry-league-apk` from the finished run.
+
+This is a debug build meant for sharing directly, not for the Play Store. The app needs an internet connection.
+
+## Project layout
+
+```
+app/                 Main page, global styles and API routes (app/api)
+components/
+  common/            Shared pieces, including the spin wheel
+  layout/            Top bar and navigation
+  modals/            Popups such as Assign Owner and League Settings
+  views/             One component per page
+lib/
+  client/            API client, sounds and logo resizing
+  server/            Database, auction, match, player, team and login logic
+  shared/            Rules used on both sides: max bid and standings
+android/             Capacitor Android project
+resources/           App icon and splash images
+scripts/             Database migration
+www/                 Offline screen for the Android app
+```
+
+All league data is stored as one JSON document in the `auction_store` table. A revision number stops two simultaneous saves from overwriting each other.
+
+## Security
+
+- Every action that changes data is checked on the server, and owners can only act for their own team
+- Superadmin and owner passwords are stored as salted scrypt hashes
+- Sessions are signed and last 12 hours
+- 8 wrong passwords from one network locks that login on that network for 15 minutes
+
+If a database password has ever been committed to a public repository, treat it as exposed and change it.

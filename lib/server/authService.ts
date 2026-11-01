@@ -1,33 +1,40 @@
-import { readDb, writeDb } from './db'
+import { readDb, writeDb, DatabaseSchema } from './db'
+import { hashPassword, passwordMatches } from './password'
 
-export async function verifyAuctioneerPin(pin: string): Promise<{ success: boolean; message?: string }> {
-  const db = await readDb()
-  const correct = (db.auctioneer?.pin || '1234').trim()
-  if (pin.trim() === correct) {
-    return { success: true }
-  }
-  return { success: false, message: 'Invalid Auctioneer PIN' }
+type AuthResult = { success: boolean; message: string; wrongPassword?: boolean }
+
+function isCorrect(db: DatabaseSchema, password: string): boolean {
+  const { pinHash, pin } = db.auctioneer || {}
+  if (pinHash) return passwordMatches(password.trim(), pinHash)
+  return password.trim() === (pin || '1234').trim()
 }
 
-export async function updateAuctioneerPin(
-  currentPin: string,
-  newPin: string
-): Promise<{ success: boolean; message: string }> {
+function storePassword(db: DatabaseSchema, password: string) {
+  db.auctioneer.pinHash = hashPassword(password.trim())
+  delete db.auctioneer.pin
+}
+
+export async function verifyAuctioneerPin(pin: string): Promise<AuthResult> {
   const db = await readDb()
-  const correct = (db.auctioneer?.pin || '1234').trim()
-  if (currentPin.trim() !== correct) {
-    return { success: false, message: 'Current PIN is incorrect' }
+  if (!isCorrect(db, pin)) return { success: false, message: 'Wrong superadmin password', wrongPassword: true }
+
+  // Older data keeps the password as plain text: replace it on the first good sign-in
+  if (!db.auctioneer?.pinHash) {
+    storePassword(db, pin)
+    await writeDb(db).catch(err => console.error('[auth] could not upgrade password storage:', err))
   }
-  if (!newPin || newPin.trim().length < 4) {
-    return { success: false, message: 'New PIN must be at least 4 digits' }
+  return { success: true, message: 'Signed in' }
+}
+
+export async function updateAuctioneerPin(currentPin: string, newPin: string): Promise<AuthResult> {
+  const db = await readDb()
+  if (!isCorrect(db, currentPin)) {
+    return { success: false, message: 'Current password is incorrect', wrongPassword: true }
   }
-  db.auctioneer.pin = newPin.trim()
+  if (!newPin || newPin.trim().length < 6) {
+    return { success: false, message: 'New password must be at least 6 characters' }
+  }
+  storePassword(db, newPin)
   await writeDb(db)
-  return { success: true, message: 'PIN updated successfully' }
+  return { success: true, message: 'Password updated' }
 }
-
-export async function getAuctioneerInfo(): Promise<{ name: string }> {
-  const db = await readDb()
-  return { name: db.auctioneer?.name || 'Chief Auctioneer' }
-}
-

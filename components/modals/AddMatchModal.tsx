@@ -38,7 +38,7 @@ export function AddMatchModal({
       <div className="setup-modal" style={{ maxWidth: '480px' }}>
         <div className="modal-head">
           <div>
-            <span className="section-kicker">AUCTIONEER FIXTURE CREATOR</span>
+            <span className="section-kicker">SUPERADMIN · FIXTURES</span>
             <h2>Schedule <em>Match.</em></h2>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>

@@ -26,16 +26,16 @@ export function AdjustBudgetModal({
       <div className="setup-modal" style={{ maxWidth: '420px' }}>
         <div className="modal-head">
           <div>
-            <span className="section-kicker">AUCTIONEER BUDGET CONTROL</span>
+            <span className="section-kicker">SUPERADMIN · BUDGET</span>
             <h2>{team.name} <em>Purse.</em></h2>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div style={{ background: '#0e1626', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--line)' }}>
+          <div style={{ background: 'var(--bg-elevated)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--line)' }}>
             <span style={{ fontSize: '11px', color: 'var(--muted)', display: 'block' }}>Current Balance</span>
-            <b style={{ fontSize: '24px', color: 'var(--gold)', fontFamily: 'Bebas Neue' }}>₹{team.purse.toLocaleString()}</b>
+            <b style={{ fontSize: '24px', color: 'var(--gold)', }}>₹{team.purse.toLocaleString()}</b>
           </div>
 
           <label>

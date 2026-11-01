@@ -1,17 +1,22 @@
 import { NextResponse } from 'next/server'
+import { serverError } from '@/lib/server/respond'
+import { requireAuth } from '@/lib/server/token'
 import { adjustTeamBudget, getAllTeams } from '@/lib/server/teamService'
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = requireAuth(req)
+  if (denied) return denied
+
   try {
     const { id } = await params
     const { mode, amount } = await req.json()
     const result = await adjustTeamBudget(id, mode || 'set', amount)
     const teams = await getAllTeams()
     return NextResponse.json({ ...result, teams }, { status: result.success ? 200 : 400 })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }

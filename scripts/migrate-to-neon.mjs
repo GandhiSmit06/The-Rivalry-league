@@ -2,7 +2,11 @@ import { neon } from '@neondatabase/serverless'
 import fs from 'fs/promises'
 import path from 'path'
 
-const connectionString = 'postgresql://neondb_owner:npg_fxZQO5Cawe4T@ep-jolly-shadow-aox6wcub-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require'
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) {
+  console.error('Set DATABASE_URL before running this script.')
+  process.exit(1)
+}
 
 async function migrate() {
   console.log('Connecting to Neon PostgreSQL...')

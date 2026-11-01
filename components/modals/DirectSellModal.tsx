@@ -60,7 +60,7 @@ export function DirectSellModal({
       <div className="setup-modal" style={{ maxWidth: '520px' }}>
         <div className="modal-head">
           <div>
-            <span className="section-kicker">AUCTIONEER DESK · DIRECT HAMMER</span>
+            <span className="section-kicker">SUPERADMIN · DIRECT HAMMER</span>
             <h2>Sell <em>Player to Franchise.</em></h2>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>
@@ -75,7 +75,7 @@ export function DirectSellModal({
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                background: '#090e18',
+                background: 'var(--bg-elevated)',
                 border: '1px solid var(--line)',
                 borderRadius: '8px',
                 color: 'var(--text)',
@@ -100,7 +100,7 @@ export function DirectSellModal({
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                background: '#090e18',
+                background: 'var(--bg-elevated)',
                 border: '1px solid var(--line)',
                 borderRadius: '8px',
                 color: 'var(--text)',
@@ -133,7 +133,7 @@ export function DirectSellModal({
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                background: '#090e18',
+                background: 'var(--bg-elevated)',
                 border: '1px solid var(--line)',
                 borderRadius: '8px',
                 color: 'var(--gold)',
@@ -162,7 +162,7 @@ export function DirectSellModal({
 
           {/* Live Impact Preview */}
           {selectedPlayer && selectedTeam && (
-            <div style={{ background: '#0e1726', border: '1px solid var(--line-strong)', padding: '12px 14px', borderRadius: '8px', fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--line-strong)', padding: '12px 14px', borderRadius: '8px', fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text)' }}>
                 <span>Player: <b>#{selectedPlayer.number} {selectedPlayer.name}</b></span>
                 <span style={{ color: 'var(--gold)', fontWeight: 800 }}>Amount: ₹{price.toLocaleString()}</span>
