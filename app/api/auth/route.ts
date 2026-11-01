@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { verifyAuctioneerPin, updateAuctioneerPin } from '@/lib/server/authService'
 import { issueToken } from '@/lib/server/token'
+import { DbConflictError } from '@/lib/server/db'
 
 export async function POST(req: Request) {
   try {
@@ -18,7 +19,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: 'Server auth is not configured (AUTH_SECRET)' }, { status: 500 })
     }
     return NextResponse.json({ ...result, ...issued, defaultPin: pin.trim() === '1234' })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    console.error('[auth] request failed:', err)
+    const message = err instanceof DbConflictError ? err.message : 'Could not save - the database did not respond'
+    return NextResponse.json({ success: false, message }, { status: 500 })
   }
 }

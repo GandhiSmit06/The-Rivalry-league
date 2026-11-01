@@ -10,6 +10,7 @@ import {
   apiAuction,
   apiMatches,
   apiOwner,
+  type OwnerDetails,
   getAuthToken,
   getOwnerTeamId,
   setAuthToken,
@@ -23,7 +24,7 @@ import { Toast } from '@/components/common/Toast'
 
 // Views
 import { HomeView } from '@/components/views/HomeView'
-import { AuctionView, type WheelScope } from '@/components/views/AuctionView'
+import { AuctionView, WHEEL_SPIN_MS, type WheelScope } from '@/components/views/AuctionView'
 import { SpectatorView } from '@/components/views/SpectatorView'
 import { TeamsView } from '@/components/views/TeamsView'
 import { PlayersView } from '@/components/views/PlayersView'
@@ -54,6 +55,7 @@ export default function Page() {
   const [bid, setBid] = useState(0)
   const [leader, setLeader] = useState<Team | null>(null)
   const [isSpinning, setIsSpinning] = useState(false)
+  const [drawnPlayerId, setDrawnPlayerId] = useState<number | null>(null)
   const [isMuted, setIsMuted] = useState(false)
   const [toast, setToast] = useState('')
   const [search, setSearch] = useState('')
@@ -211,12 +213,12 @@ export default function Page() {
         setAuthToken(res.token)
         setIsAuctioneer(true)
         setAuthModalOpen(false)
-        notify(res.defaultPin ? 'Unlocked - change the default PIN in Settings!' : 'Auctioneer mode unlocked')
+        notify(res.defaultPin ? 'Unlocked - change the default password in Settings!' : 'Auctioneer mode unlocked')
       } else {
-        setAuthError(res.message || 'Incorrect PIN')
+        setAuthError(res.message || 'Wrong password')
       }
     } catch {
-      setAuthError('Error verifying PIN')
+      setAuthError('Could not reach the server')
     }
   }
 
@@ -231,7 +233,7 @@ export default function Page() {
         setPage('auction')
         notify('Signed in as team owner')
       } else {
-        setAuthError(res.message || 'Wrong login ID or PIN')
+        setAuthError(res.message || 'Wrong login ID or password')
       }
     } catch {
       setAuthError('Could not sign in')
@@ -280,31 +282,26 @@ export default function Page() {
     }
   }
 
-  const handleSaveOwnerLogin = async (
-    teamId: string,
-    ownerName: string,
-    loginId: string,
-    pin: string
-  ): Promise<string | null> => {
+  const handleSaveOwnerLogin = async (teamId: string, details: OwnerDetails): Promise<string | null> => {
     try {
-      const data = await apiOwner.setLogin(teamId, ownerName, loginId, pin)
-      if (data.success) loadState()
-      return data.success ? null : data.message
+      const data = await apiOwner.setLogin(teamId, details)
+      if (!data.success) return data.message || 'Could not save the owner'
+      setAwardTeam('') // the selected team may just have been renamed
+      loadState()
+      return null
     } catch {
-      return 'Could not save the login'
+      return 'Could not save the owner'
     }
   }
 
-  const handleChangePin = async (currentPin: string, newPin: string): Promise<boolean> => {
+  const handleChangePin = async (currentPin: string, newPin: string): Promise<string | null> => {
     try {
       const res = await apiAuth.changePin(currentPin, newPin)
-      if (res.success) {
-        notify('PIN changed successfully')
-        return true
-      }
-      return false
+      if (!res.success) return res.message || 'Could not change the password'
+      notify('Superadmin password changed')
+      return null
     } catch {
-      return false
+      return 'Could not reach the server'
     }
   }
 
@@ -397,31 +394,39 @@ export default function Page() {
       setLeader(null)
       setBid(0)
 
-      window.setTimeout(async () => {
-        try {
-          const data = await apiAuction.spin(wheelScope)
-          if (data.success) {
-            setCurrent(data.player)
-            const initialBase = data.player.base || 500
-            setBid(initialBase)
-            setAwardPrice(initialBase)
-            if (teams.length > 0) setAwardTeam(teams[0].name)
-            sounds.playHammer()
-            notify(
-              data.isUnsoldRound
-                ? `[RE-AUCTION ROUND] Unsold Player #${data.player.number} (${data.player.name}) drawn on the block!`
-                : `Player #${data.player.number} (${data.player.name}) drawn on the block!`
-            )
-          } else {
-            notify(data.message)
-          }
-        } catch {
-          notify('Failed to draw from wheel')
-        } finally {
-          setIsSpinning(false)
-          loadState()
+      const finish = () => {
+        setDrawnPlayerId(null)
+        setIsSpinning(false)
+        loadState()
+      }
+
+      try {
+        // The server picks first, so the wheel can land on the player it really drew
+        const data = await apiAuction.spin(wheelScope)
+        if (!data.success) {
+          notify(data.message)
+          finish()
+          return
         }
-      }, 1800)
+        setDrawnPlayerId(data.player.id)
+        window.setTimeout(() => {
+          setCurrent(data.player)
+          const initialBase = data.player.base || 500
+          setBid(initialBase)
+          setAwardPrice(initialBase)
+          if (teams.length > 0) setAwardTeam(teams[0].name)
+          sounds.playHammer()
+          notify(
+            data.isUnsoldRound
+              ? `[RE-AUCTION ROUND] Unsold Player #${data.player.number} (${data.player.name}) drawn on the block!`
+              : `Player #${data.player.number} (${data.player.name}) drawn on the block!`
+          )
+          finish()
+        }, WHEEL_SPIN_MS + 500)
+      } catch {
+        notify('Failed to draw from wheel')
+        finish()
+      }
     })
   }
 
@@ -931,6 +936,7 @@ export default function Page() {
             bid={bid}
             leader={leader}
             spinning={isSpinning}
+            drawnPlayerId={drawnPlayerId}
             wheelScope={wheelScope}
             setWheelScope={setWheelScope}
             awardTeam={awardTeam}

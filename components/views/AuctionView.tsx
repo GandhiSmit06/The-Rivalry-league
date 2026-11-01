@@ -17,6 +17,8 @@ const INCREMENTS = [
   { value: 1000, label: 'Mega bid', tone: 'hot' }
 ]
 
+export const WHEEL_SPIN_MS = 3200
+
 const CX = 160
 const CY = 160
 const R = 146
@@ -58,6 +60,7 @@ export function AuctionView({
   bid,
   leader,
   spinning,
+  drawnPlayerId,
   wheelScope,
   setWheelScope,
   awardTeam,
@@ -82,6 +85,7 @@ export function AuctionView({
   bid: number
   leader: Team | null
   spinning: boolean
+  drawnPlayerId: number | null
   wheelScope: WheelScope
   setWheelScope: (scope: WheelScope) => void
   awardTeam: string
@@ -132,11 +136,15 @@ export function AuctionView({
     if (current) setTab('stage')
   }, [current])
 
+  // Turn so the drawn player's wedge stops under the pointer at 12 o'clock
   useEffect(() => {
-    if (spinning) {
-      setWheelAngle(prev => prev + (5 + Math.random() * 2) * 360 + Math.floor(Math.random() * 180))
-    }
-  }, [spinning])
+    if (drawnPlayerId === null) return
+    const index = wheelPlayers.findIndex(p => p.id === drawnPlayerId)
+    if (index < 0) return
+    const stop = 360 - ((index + 0.5) * 360) / wheelPlayers.length
+    setWheelAngle(prev => prev - (prev % 360) + 6 * 360 + stop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new draw starts a spin
+  }, [drawnPlayerId])
 
   const selectedTeam = teams.find(t => t.name === awardTeam) || null
   const selectedFull = !!selectedTeam && selectedTeam.players >= maxSquadSize
@@ -229,7 +237,7 @@ export function AuctionView({
                     className="spinner-svg-wrap"
                     style={{
                       transform: `rotate(${wheelAngle}deg)`,
-                      transition: spinning ? 'transform 2.8s cubic-bezier(0.12, 0.85, 0.22, 1)' : 'none'
+                      transition: spinning ? `transform ${WHEEL_SPIN_MS}ms cubic-bezier(0.12, 0.85, 0.22, 1)` : 'none'
                     }}
                   >
                     <svg viewBox="0 0 320 320" style={{ display: 'block', overflow: 'visible' }} aria-hidden="true">

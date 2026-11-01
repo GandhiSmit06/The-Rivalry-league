@@ -6,7 +6,7 @@ export async function verifyAuctioneerPin(pin: string): Promise<{ success: boole
   if (pin.trim() === correct) {
     return { success: true }
   }
-  return { success: false, message: 'Invalid Auctioneer PIN' }
+  return { success: false, message: 'Wrong superadmin password' }
 }
 
 export async function updateAuctioneerPin(
@@ -16,12 +16,12 @@ export async function updateAuctioneerPin(
   const db = await readDb()
   const correct = (db.auctioneer?.pin || '1234').trim()
   if (currentPin.trim() !== correct) {
-    return { success: false, message: 'Current PIN is incorrect' }
+    return { success: false, message: 'Current password is incorrect' }
   }
-  if (!newPin || newPin.trim().length < 4) {
-    return { success: false, message: 'New PIN must be at least 4 digits' }
+  if (!newPin || newPin.trim().length < 6) {
+    return { success: false, message: 'New password must be at least 6 characters' }
   }
   db.auctioneer.pin = newPin.trim()
   await writeDb(db)
-  return { success: true, message: 'PIN updated successfully' }
+  return { success: true, message: 'Password updated' }
 }

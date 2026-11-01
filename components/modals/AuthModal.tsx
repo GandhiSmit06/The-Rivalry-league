@@ -61,7 +61,7 @@ export function AuthModal({
             </label>
           )}
           <label>
-            PIN
+            Password
             <input
               type="password"
               value={pin}

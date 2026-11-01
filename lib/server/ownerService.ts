@@ -1,10 +1,10 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
-import { readDb, writeDb, Team } from './db'
+import { readDb, writeDb, DatabaseSchema, Team } from './db'
 
 // Resized in the browser to 256x256, so a real logo is far below this.
 const MAX_LOGO_CHARS = 150_000
 const LOGO_PATTERN = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/
-const MIN_PIN_LENGTH = 6
+const MIN_PASSWORD_LENGTH = 6
 
 function hashPin(pin: string): string {
   const salt = randomBytes(16).toString('hex')
@@ -19,18 +19,41 @@ function pinMatches(pin: string, stored: string): boolean {
   return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 
-/** Superadmin assigns (or resets) the login a team owner signs in with. */
+/** Teams are referenced by name, so a rename has to reach every place that stores it. */
+function renameTeam(db: DatabaseSchema, team: Team, name: string) {
+  const oldName = team.name
+  const swap = (value?: string) => (value === oldName ? name : value)
+
+  db.players.forEach(p => {
+    p.soldTo = swap(p.soldTo)
+  })
+  db.matches.forEach(m => {
+    if (m.teamA !== oldName && m.teamB !== oldName) return
+    m.teamA = swap(m.teamA) as string
+    m.teamB = swap(m.teamB) as string
+    m.tossWinner = swap(m.tossWinner)
+    m.winner = swap(m.winner)
+    m.result = m.result?.split(oldName).join(name)
+  })
+  if (db.auctionState.leaderTeamName === oldName) db.auctionState.leaderTeamName = name
+  team.name = name
+}
+
+/**
+ * Superadmin sets a team's name, owner and login. A blank password keeps the
+ * existing one, so correcting a name does not lock the owner out.
+ */
 export async function setOwnerLogin(
   teamId: string,
-  loginId: string,
-  pin: string,
-  ownerName?: string
+  details: { teamName?: string; ownerName?: string; loginId: string; password?: string }
 ): Promise<{ success: boolean; message: string }> {
-  const id = (loginId || '').trim().toLowerCase()
-  const cleanPin = (pin || '').trim()
+  const id = (details.loginId || '').trim().toLowerCase()
+  const password = (details.password || '').trim()
+  const teamName = details.teamName?.trim()
+  if (details.teamName !== undefined && !teamName) return { success: false, message: 'Team name is required' }
   if (id.length < 3) return { success: false, message: 'Login ID must be at least 3 characters' }
-  if (cleanPin.length < MIN_PIN_LENGTH) {
-    return { success: false, message: `PIN must be at least ${MIN_PIN_LENGTH} characters` }
+  if (password && password.length < MIN_PASSWORD_LENGTH) {
+    return { success: false, message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` }
   }
 
   const db = await readDb()
@@ -42,8 +65,18 @@ export async function setOwnerLogin(
   )
   if (taken) return { success: false, message: 'That login ID is already used by another team' }
 
-  db.ownerLogins = { ...db.ownerLogins, [team.id]: { loginId: id, pinHash: hashPin(cleanPin) } }
-  if (ownerName?.trim()) team.owner = ownerName.trim()
+  const existingHash = db.ownerLogins?.[team.id]?.pinHash
+  if (!password && !existingHash) return { success: false, message: 'Enter a password for this owner' }
+
+  if (teamName && teamName !== team.name) {
+    const clash = db.teams.some(t => t.id !== team.id && t.name.toLowerCase() === teamName.toLowerCase())
+    if (clash) return { success: false, message: 'Another team already has that name' }
+    renameTeam(db, team, teamName)
+  }
+
+  const pinHash = password ? hashPin(password) : (existingHash as string)
+  db.ownerLogins = { ...db.ownerLogins, [team.id]: { loginId: id, pinHash } }
+  if (details.ownerName?.trim()) team.owner = details.ownerName.trim()
   await writeDb(db)
   return { success: true, message: `Login saved for ${team.name}` }
 }

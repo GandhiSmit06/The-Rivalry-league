@@ -83,6 +83,8 @@ export const apiAuth = {
     })
 }
 
+export type OwnerDetails = { teamName: string; ownerName: string; loginId: string; password: string }
+
 export const apiOwner = {
   login: (loginId: string, pin: string) =>
     request<{ success: boolean; message?: string; token?: string; teamId?: string }>('/api/auth/owner', {
@@ -91,10 +93,10 @@ export const apiOwner = {
     }),
   getLogin: (teamId: string) =>
     request<{ success: boolean; loginId: string }>(`/api/teams/${encodeURIComponent(teamId)}/owner-login`),
-  setLogin: (teamId: string, ownerName: string, loginId: string, pin: string) =>
+  setLogin: (teamId: string, details: OwnerDetails) =>
     request<{ success: boolean; message: string }>(`/api/teams/${encodeURIComponent(teamId)}/owner-login`, {
       method: 'POST',
-      body: JSON.stringify({ ownerName, loginId, pin })
+      body: JSON.stringify(details)
     }),
   bid: (increment: number) =>
     request<{ success: boolean; message: string }>('/api/auction', {

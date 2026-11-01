@@ -7,7 +7,7 @@ export async function POST(req: Request) {
     const { loginId, pin } = await req.json()
     const team = await verifyOwnerLogin(loginId || '', pin || '')
     if (!team) {
-      return NextResponse.json({ success: false, message: 'Wrong login ID or PIN' }, { status: 401 })
+      return NextResponse.json({ success: false, message: 'Wrong login ID or password' }, { status: 401 })
     }
     const issued = issueToken('owner', team.id)
     if (!issued) {

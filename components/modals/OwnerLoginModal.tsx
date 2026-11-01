@@ -1,22 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, KeyRound, X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import type { Team } from '@/lib/server/db'
-import { apiOwner } from '@/lib/client/api'
+import { apiOwner, type OwnerDetails } from '@/lib/client/api'
 
-const ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz'
-
-function randomText(length: number): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(length))
-  return Array.from(bytes, b => ALPHABET[b % ALPHABET.length]).join('')
-}
-
-function generateLoginId(team: Team): string {
-  return `${team.short.toLowerCase()}-${randomText(4)}`
-}
-
-/** Superadmin assigns a team's owner and generates or resets their login. PINs are hashed, so they can only be reset. */
+/** Superadmin sets a team's name, its owner and the login they choose. Passwords are hashed, so they can only be replaced. */
 export function OwnerLoginModal({
   team,
   onClose,
@@ -24,36 +13,35 @@ export function OwnerLoginModal({
 }: {
   team: Team
   onClose: () => void
-  onSave: (teamId: string, ownerName: string, loginId: string, pin: string) => Promise<string | null>
+  onSave: (teamId: string, details: OwnerDetails) => Promise<string | null>
 }) {
+  const [teamName, setTeamName] = useState(team.name)
   const [ownerName, setOwnerName] = useState(team.owner)
   const [loginId, setLoginId] = useState('')
   const [hasLogin, setHasLogin] = useState(false)
-  const [pin, setPin] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     let active = true
     apiOwner.getLogin(team.id).then(res => {
-      if (!active || !res.success) return
-      if (res.loginId) {
-        setLoginId(res.loginId)
-        setHasLogin(true)
-      } else {
-        setLoginId(generateLoginId(team))
-        setPin(randomText(8))
-      }
+      if (!active || !res.loginId) return
+      setLoginId(res.loginId)
+      setHasLogin(true)
     })
     return () => {
       active = false
     }
-  }, [team])
+  }, [team.id])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    const failure = await onSave(team.id, ownerName, loginId, pin)
+    setSaving(true)
+    const failure = await onSave(team.id, { teamName, ownerName, loginId, password })
+    setSaving(false)
     if (failure) setError(failure)
     else setSaved(true)
   }
@@ -72,11 +60,14 @@ export function OwnerLoginModal({
         {saved ? (
           <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
             <p style={{ fontSize: 13, color: 'var(--muted)' }}>
-              Send these to {ownerName.trim() || 'the owner'}. The PIN won&apos;t be shown again.
+              {password.trim()
+                ? `Send these to ${ownerName.trim() || 'the owner'}. The password won't be shown again.`
+                : 'Saved. The owner keeps their current password.'}
             </p>
             <div className="toss-line">
+              <div>Team: <b>{teamName.trim()}</b></div>
               <div>Login ID: <b>{loginId.trim().toLowerCase()}</b></div>
-              <div>PIN: <b>{pin.trim()}</b></div>
+              {password.trim() && <div>Password: <b>{password.trim()}</b></div>}
             </div>
             <div className="modal-actions">
               <button className="primary-btn" onClick={onClose}><Check size={14} /> Done</button>
@@ -85,31 +76,41 @@ export function OwnerLoginModal({
         ) : (
           <form onSubmit={submit} style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <label>
+              Team name
+              <input value={teamName} onChange={e => setTeamName(e.target.value)} required />
+            </label>
+            <label>
               Owner name
               <input value={ownerName} onChange={e => setOwnerName(e.target.value)} required />
             </label>
             <label>
               Login ID
-              <input value={loginId} onChange={e => setLoginId(e.target.value)} autoCapitalize="none" required />
+              <input
+                value={loginId}
+                onChange={e => setLoginId(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                required
+              />
             </label>
             <label>
-              {hasLogin ? 'New PIN (replaces the old one)' : 'PIN (6+ characters)'}
-              <input value={pin} onChange={e => setPin(e.target.value)} autoComplete="off" required />
+              {hasLogin ? 'New password (leave blank to keep it)' : 'Password (6+ characters)'}
+              <input
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                required={!hasLogin}
+              />
             </label>
-            <button
-              type="button"
-              className="text-btn"
-              onClick={() => {
-                setLoginId(generateLoginId(team))
-                setPin(randomText(8))
-              }}
-            >
-              <KeyRound size={13} /> Generate new ID and PIN
-            </button>
             {error && <div style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }}>{error}</div>}
             <div className="modal-actions">
               <button type="button" className="ghost-btn" onClick={onClose}>Cancel</button>
-              <button type="submit" className="primary-btn"><Check size={14} /> Save Owner</button>
+              <button type="submit" className="primary-btn" disabled={saving}>
+                <Check size={14} /> {saving ? 'Saving...' : 'Save Owner'}
+              </button>
             </div>
           </form>
         )}
