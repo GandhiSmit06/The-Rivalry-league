@@ -42,8 +42,8 @@ export function HomeView({
 
   const rules = [
     { icon: CircleDollarSign, title: '₹500 Base Price', text: 'Every player starts at ₹500 base price with custom incremental bids.' },
-    { icon: Users, title: 'Select Squad Size', text: `The auctioneer sets the exact player count per franchise (${maxSquadSize} players).` },
-    { icon: Gavel, title: 'Hammer Down', text: 'The auctioneer chooses which player goes to which team and sets the price.' },
+    { icon: Users, title: 'Select Squad Size', text: `The superadmin sets the exact player count per franchise (${maxSquadSize} players).` },
+    { icon: Gavel, title: 'Hammer Down', text: 'The superadmin chooses which player goes to which team and sets the price.' },
     { icon: Coins, title: 'Match Toss Flip', text: 'Interactive 3D coin toss with official Bat or Bowl calls.' }
   ]
 
@@ -138,7 +138,7 @@ export function HomeView({
       </section>
 
       <section className="card card-pad" style={{ marginTop: 28 }}>
-        <span className="kicker">Auctioneer desk</span>
+        <span className="kicker">Superadmin desk</span>
         <h2 className="section-title" style={{ marginTop: 6 }}>Your room.<br />Your tournament.</h2>
         <div className="quick-grid">
           <button className="quick-link" onClick={onManageSchedule}>

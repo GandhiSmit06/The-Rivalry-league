@@ -60,7 +60,7 @@ export function DirectSellModal({
       <div className="setup-modal" style={{ maxWidth: '520px' }}>
         <div className="modal-head">
           <div>
-            <span className="section-kicker">AUCTIONEER DESK · DIRECT HAMMER</span>
+            <span className="section-kicker">SUPERADMIN · DIRECT HAMMER</span>
             <h2>Sell <em>Player to Franchise.</em></h2>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>

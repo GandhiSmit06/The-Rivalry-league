@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
+import { serverError } from '@/lib/server/respond'
 import { verifyOwnerLogin } from '@/lib/server/ownerService'
 import { issueToken } from '@/lib/server/token'
 
 export async function POST(req: Request) {
   try {
     const { loginId, pin } = await req.json()
-    const team = await verifyOwnerLogin(loginId || '', pin || '')
+    const team = await verifyOwnerLogin(String(loginId ?? ''), String(pin ?? ''))
     if (!team) {
       return NextResponse.json({ success: false, message: 'Wrong login ID or password' }, { status: 401 })
     }
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
       )
     }
     return NextResponse.json({ success: true, teamId: team.id, ...issued })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }

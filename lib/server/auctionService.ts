@@ -181,6 +181,10 @@ async function tryBid(teamName: string, amount: number, increment?: number): Pro
     }
   }
 
+  if (db.auctionState.leaderTeamId === team.id) {
+    return { success: false, message: `${team.name} already holds the top bid` }
+  }
+
   const bidAmount = increment ? (db.auctionState.currentBid || 0) + increment : Number(amount)
   if (!Number.isFinite(bidAmount) || bidAmount <= 0) {
     return { success: false, message: 'Please enter a valid bid amount' }
@@ -215,7 +219,8 @@ async function tryBid(teamName: string, amount: number, increment?: number): Pro
 export async function sellPlayer(
   teamName: string,
   price?: number,
-  playerId?: number
+  playerId?: number,
+  seenBid?: number // the bid on the seller's screen, so a newer bid is never sold over
 ): Promise<{
   success: boolean
   player?: Player
@@ -235,6 +240,14 @@ export async function sellPlayer(
   const targetPlayer = db.players.find(p => p.id === targetPlayerId)
   if (!targetPlayer) {
     return { success: false, message: 'Player not found' }
+  }
+
+  const live = targetPlayer.id === db.auctionState.currentPlayerId
+  if (live && seenBid !== undefined && Number(seenBid) !== db.auctionState.currentBid) {
+    return {
+      success: false,
+      message: `New bid: ₹${db.auctionState.currentBid.toLocaleString()} by ${db.auctionState.leaderTeamName || 'a team'}. Check it and sell again.`
+    }
   }
 
   const winningTeamName = teamName || db.auctionState.leaderTeamName
@@ -339,7 +352,6 @@ export async function resetAuction(): Promise<{
   teams: Team[]
 }> {
   const db = await readDb()
-  const defaultPurse = db.league?.defaultPurse || 20000
 
   db.players.forEach(p => {
     p.status = 'Upcoming'
@@ -348,7 +360,7 @@ export async function resetAuction(): Promise<{
   })
 
   db.teams.forEach(t => {
-    t.purse = defaultPurse
+    t.purse += t.spent // gives back what was spent, so a team's own purse size survives
     t.spent = 0
     t.players = 0
   })

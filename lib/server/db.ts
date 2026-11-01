@@ -228,6 +228,7 @@ export async function readDb(): Promise<DatabaseSchema> {
         return data
       }
     } catch (err) {
+      if (process.env.VERCEL) throw err
       console.error('[Neon Postgres Read Warning, falling back to local file]:', err)
     }
   }
@@ -252,7 +253,7 @@ export async function writeDb(data: DatabaseSchema): Promise<void> {
       return
     } catch (err) {
       data.rev = baseRev
-      if (err instanceof DbConflictError) throw err
+      if (err instanceof DbConflictError || process.env.VERCEL) throw err
       console.error('[Neon Postgres Write Warning, saving locally]:', err)
     }
   }

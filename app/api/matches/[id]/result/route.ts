@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { serverError } from '@/lib/server/respond'
 import { requireAuth } from '@/lib/server/token'
 import { recordMatchResult, getAllMatches } from '@/lib/server/matchService'
 
@@ -15,7 +16,7 @@ export async function POST(
     const result = await recordMatchResult(id, body)
     const matches = await getAllMatches()
     return NextResponse.json({ ...result, matches }, { status: result.success ? 200 : 400 })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }

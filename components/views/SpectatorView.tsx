@@ -61,7 +61,7 @@ export function SpectatorView({
             </div>
             <p className="spectator-leader">
               {leader ? (
-                <>Leading: <b style={{ color: leader.color }}>{leader.name}</b></>
+                <>Leading: <span className="team-dot" style={{ background: leader.color }} /> <b>{leader.name}</b></>
               ) : (
                 <>Base price ₹{(current.base || 500).toLocaleString()} · no bids yet</>
               )}

@@ -26,7 +26,7 @@ export function AdjustBudgetModal({
       <div className="setup-modal" style={{ maxWidth: '420px' }}>
         <div className="modal-head">
           <div>
-            <span className="section-kicker">AUCTIONEER BUDGET CONTROL</span>
+            <span className="section-kicker">SUPERADMIN · BUDGET</span>
             <h2>{team.name} <em>Purse.</em></h2>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>

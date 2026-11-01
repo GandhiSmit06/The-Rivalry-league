@@ -59,7 +59,7 @@ export function ScheduleView({
         <div className="empty-state">
           <CalendarDays size={38} />
           <h3>No matches scheduled</h3>
-          <p>Fixtures appear here once the auctioneer creates them.</p>
+          <p>Fixtures appear here once the superadmin creates them.</p>
           {isAuctioneer && (
             <button className="primary-btn" onClick={onGenerateRoundRobin} disabled={teams.length < 2}>
               <Dices size={16} /> Generate Round Robin
@@ -90,7 +90,7 @@ export function ScheduleView({
                     {isAuctioneer && (
                       <button
                         className="icon-btn"
-                        style={{ width: 28, height: 28 }}
+                        style={{ width: 34, height: 34 }}
                         onClick={() => onDeleteMatch(m.id)}
                         aria-label={`Delete match ${m.matchNumber}`}
                       >

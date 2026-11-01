@@ -36,8 +36,8 @@ export function StandingsView({ teams, matches }: { teams: Team[]; matches: Matc
                 <th title="Played">P</th>
                 <th title="Won">W</th>
                 <th title="Lost">L</th>
-                <th title="Tied">T</th>
-                <th title="No result">NR</th>
+                <th title="Tied" className="hide-sm">T</th>
+                <th title="No result" className="hide-sm">NR</th>
                 <th title="Net run rate">NRR</th>
                 <th title="Points">Pts</th>
                 <th className="hide-sm">Form</th>
@@ -54,8 +54,8 @@ export function StandingsView({ teams, matches }: { teams: Team[]; matches: Matc
                   <td>{r.played}</td>
                   <td>{r.won}</td>
                   <td>{r.lost}</td>
-                  <td>{r.tied}</td>
-                  <td>{r.noResult}</td>
+                  <td className="hide-sm">{r.tied}</td>
+                  <td className="hide-sm">{r.noResult}</td>
                   <td className={r.nrr > 0 ? 'pos' : r.nrr < 0 ? 'neg' : ''}>
                     {r.played ? `${r.nrr >= 0 ? '+' : ''}${r.nrr.toFixed(3)}` : '0.000'}
                   </td>

@@ -32,7 +32,7 @@ export function AddPlayerModal({
       <div className="setup-modal" style={{ maxWidth: '440px' }}>
         <div className="modal-head">
           <div>
-            <span className="section-kicker">AUCTIONEER DESK · PLAYER #{nextNumber}</span>
+            <span className="section-kicker">SUPERADMIN · PLAYER #{nextNumber}</span>
             <h2>Register <em>Player #{nextNumber}.</em></h2>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>

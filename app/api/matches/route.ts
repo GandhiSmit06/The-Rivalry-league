@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { serverError } from '@/lib/server/respond'
 import { requireAuth } from '@/lib/server/token'
 import {
   getAllMatches,
@@ -11,8 +12,8 @@ export async function GET() {
   try {
     const matches = await getAllMatches()
     return NextResponse.json({ success: true, matches })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }
 
@@ -30,8 +31,8 @@ export async function POST(req: Request) {
     const result = await createMatch(body)
     const matches = await getAllMatches()
     return NextResponse.json({ ...result, matches }, { status: result.success ? 200 : 400 })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }
 
@@ -48,7 +49,7 @@ export async function DELETE(req: Request) {
     const result = await deleteMatch(id)
     const matches = await getAllMatches()
     return NextResponse.json({ ...result, matches }, { status: result.success ? 200 : 400 })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }

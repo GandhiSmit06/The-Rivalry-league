@@ -127,13 +127,14 @@ export async function recordMatchResult(
     const wickets = Math.floor(Number(s.wickets))
     const balls = Math.floor(Number(s.balls))
     if (![runs, wickets, balls].every(Number.isFinite) || runs < 0 || wickets < 0 || balls < 0) return null
+    if (wickets > 10) return null
     if (balls > oversLimit * 6) return null
     return { runs, wickets, balls, allOut: !!s.allOut }
   }
   const scoreA = clean(input.scoreA)
   const scoreB = clean(input.scoreB)
   if (!scoreA || !scoreB) {
-    return { success: false, message: 'Enter valid runs, wickets and overs (overs cannot exceed the limit)' }
+    return { success: false, message: 'Enter valid runs, wickets (10 at most) and overs (within the limit)' }
   }
 
   // Who batted first decides how the margin is described (runs vs wickets)

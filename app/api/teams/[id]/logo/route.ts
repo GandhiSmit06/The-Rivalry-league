@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { serverError } from '@/lib/server/respond'
 import { requireTeamOwner } from '@/lib/server/token'
 import { setTeamLogo } from '@/lib/server/ownerService'
 
@@ -13,8 +14,8 @@ export async function PUT(req: Request, { params }: Ctx) {
     const { logo } = await req.json()
     const result = await setTeamLogo(id, logo ?? '')
     return NextResponse.json(result, { status: result.success ? 200 : 400 })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }
 
@@ -26,7 +27,7 @@ export async function DELETE(req: Request, { params }: Ctx) {
 
     const result = await setTeamLogo(id, null)
     return NextResponse.json(result, { status: result.success ? 200 : 400 })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }

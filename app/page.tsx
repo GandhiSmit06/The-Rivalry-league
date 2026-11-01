@@ -173,15 +173,15 @@ export default function Page() {
   useEffect(() => {
     const id = window.setInterval(() => {
       if (!document.hidden && !anyModalOpen && !isSpinning) loadState()
-    }, 4000)
+    }, current ? 2000 : 4000) // bids need to reach every screen quickly
     return () => window.clearInterval(id)
-  }, [loadState, anyModalOpen, isSpinning])
+  }, [loadState, anyModalOpen, isSpinning, !!current]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auctioneer Gatekeeper Check
   const guardAuctioneer = (action: () => void) => {
     if (!isAuctioneer) {
       setAuthModalOpen(true)
-      notify('Auctioneer authorization required')
+      notify('Superadmin sign-in required')
       return
     }
     action()
@@ -213,7 +213,7 @@ export default function Page() {
         setAuthToken(res.token)
         setIsAuctioneer(true)
         setAuthModalOpen(false)
-        notify(res.defaultPin ? 'Unlocked - change the default password in Settings!' : 'Auctioneer mode unlocked')
+        notify(res.defaultPin ? 'Unlocked - change the default password in Settings!' : 'Signed in as superadmin')
       } else {
         setAuthError(res.message || 'Wrong password')
       }
@@ -318,9 +318,7 @@ export default function Page() {
       setSeason(newSeason)
       try {
         const res = await apiLeague.updateSettings({ season: newSeason })
-        if (res.success) {
-          notify(`Active tournament set to Season ${newSeason}`)
-        }
+        notify(res.success ? `Active tournament set to Season ${newSeason}` : res.message || 'Could not update season')
       } catch {
         notify('Failed to update season')
       } finally {
@@ -334,9 +332,7 @@ export default function Page() {
       setMaxSquadSize(newLimit)
       try {
         const res = await apiLeague.updateSettings({ maxSquadSize: newLimit })
-        if (res.success) {
-          notify(`Squad capacity set to ${newLimit} players/team`)
-        }
+        notify(res.success ? `Squad capacity set to ${newLimit} players/team` : res.message || 'Could not update squad limit')
       } catch {
         notify('Failed to update squad limit')
       } finally {
@@ -357,6 +353,8 @@ export default function Page() {
         if (res.success) {
           notify('League settings saved')
           setSetupOpen(false)
+        } else {
+          notify(res.message || 'Could not save settings')
         }
       } catch {
         notify('Failed to save settings')
@@ -513,7 +511,7 @@ export default function Page() {
       }
 
       try {
-        const data = await apiAuction.sell(awardTeam, awardPrice, current.id)
+        const data = await apiAuction.sell(awardTeam, awardPrice, current.id, bid)
         if (data.success) {
           sounds.playCheer()
           notify(data.message)
@@ -573,6 +571,8 @@ export default function Page() {
           setCurrent(null)
           setLeader(null)
           setBid(0)
+        } else {
+          notify(data.message || 'Could not mark unsold')
         }
       } catch {
         notify('Failed to mark unsold')
@@ -594,6 +594,8 @@ export default function Page() {
           setCurrent(null)
           setLeader(null)
           setBid(0)
+        } else {
+          notify(data.message || 'Could not reset the auction')
         }
       } catch {
         notify('Failed to reset auction')
@@ -637,9 +639,7 @@ export default function Page() {
       }
       try {
         const data = await apiTeams.delete(name)
-        if (data.success) {
-          notify(`Franchise "${name}" deleted`)
-        }
+        notify(data.success ? `Franchise "${name}" deleted` : data.message || 'Could not delete team')
       } catch {
         notify('Failed to delete team')
       } finally {
@@ -678,6 +678,8 @@ export default function Page() {
         if (data.success) {
           notify(`Player #${data.player?.number || nextPlayerNumber} "${p.name}" added with base price ₹${p.base || 500}`)
           setPlayerModalOpen(false)
+        } else {
+          notify(data.message || 'Could not add player')
         }
       } catch {
         notify('Error adding player')
@@ -703,6 +705,8 @@ export default function Page() {
         if (data.success) {
           notify(`Imported ${list.length} players`)
           setBulkModalOpen(false)
+        } else {
+          notify((data as { message?: string }).message || 'Could not import players')
         }
       } catch {
         notify('Failed to bulk import')
@@ -714,11 +718,11 @@ export default function Page() {
 
   const handleDeletePlayer = async (id: number) => {
     guardAuctioneer(async () => {
+      const target = players.find(p => p.id === id)
+      if (!confirm(`Remove ${target?.name || 'this player'}? A sold player's price goes back to their team.`)) return
       try {
         const data = await apiPlayers.delete(id)
-        if (data.success) {
-          notify('Player removed')
-        }
+        notify(data.success ? 'Player removed' : data.message || 'Could not remove player')
       } catch {
         notify('Failed to delete player')
       } finally {
@@ -731,9 +735,7 @@ export default function Page() {
     guardAuctioneer(async () => {
       try {
         const data = await apiPlayers.update(id, { status: 'Upcoming' })
-        if (data.success) {
-          notify('Player restored to upcoming pool')
-        }
+        notify(data.success ? 'Player restored to upcoming pool' : data.message || 'Could not reopen player')
       } catch {
         notify('Failed to re-auction player')
       } finally {
@@ -757,6 +759,8 @@ export default function Page() {
         if (data.success) {
           notify(`Match fixture scheduled: ${m.teamA} vs ${m.teamB}`)
           setAddMatchModalOpen(false)
+        } else {
+          notify(data.message || 'Could not schedule match')
         }
       } catch {
         notify('Failed to schedule match')
@@ -768,6 +772,9 @@ export default function Page() {
 
   const handleGenerateRoundRobin = async () => {
     guardAuctioneer(async () => {
+      if (matches.length > 0 && !confirm(`Replace all ${matches.length} fixtures? Tosses and results entered so far will be lost.`)) {
+        return
+      }
       try {
         const data = await apiMatches.generateRoundRobin()
         if (data.success) {
@@ -785,11 +792,10 @@ export default function Page() {
 
   const handleDeleteMatch = async (id: string) => {
     guardAuctioneer(async () => {
+      if (!confirm('Delete this match? Its toss and result will be lost.')) return
       try {
         const data = await apiMatches.delete(id)
-        if (data.success) {
-          notify('Match fixture removed')
-        }
+        notify(data.success ? 'Match fixture removed' : data.message || 'Could not delete match')
       } catch {
         notify('Failed to delete fixture')
       } finally {
@@ -800,12 +806,20 @@ export default function Page() {
 
   const handleRecordToss = async (matchId: string, tossWinner: string, tossDecision: 'Bat' | 'Bowl') => {
     guardAuctioneer(async () => {
+      // A quick toss with no fixture has nothing to save
+      if (matchId === 'temp_toss') {
+        notify(`${tossWinner} won the toss and chose to ${tossDecision}`)
+        setTossModalMatch(null)
+        return
+      }
       try {
         const data = await apiMatches.recordToss(matchId, tossWinner, tossDecision)
         if (data.success) {
           sounds.playCheer()
           notify(data.message)
           setTossModalMatch(null)
+        } else {
+          notify(data.message || 'Could not record toss')
         }
       } catch {
         notify('Failed to record toss')
@@ -839,8 +853,9 @@ export default function Page() {
 
   const handleQuickToss = () => {
     guardAuctioneer(() => {
-      if (matches.length > 0) {
-        setTossModalMatch(matches[0])
+      const nextMatch = matches.find(m => m.status !== 'Completed')
+      if (nextMatch) {
+        setTossModalMatch(nextMatch)
       } else if (teams.length >= 2) {
         setTossModalMatch({
           id: 'temp_toss',
@@ -861,12 +876,14 @@ export default function Page() {
 
   // Keyboard shortcuts on the Auction page: S spin, 1-9 bid for team N, Enter sell, U unsold
   useEffect(() => {
-    if (page !== 'auction' || anyModalOpen) return
+    if (page !== 'auction' || anyModalOpen || !isAuctioneer) return
     const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return
       const el = e.target as HTMLElement | null
       if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return
       if (e.ctrlKey || e.metaKey || e.altKey) return
       const k = e.key.toLowerCase()
+      if (k === 'enter' && el?.tagName === 'BUTTON') return // Enter on a focused button presses that button
       if (k === 's') { if (!current) handleSpin() }
       else if (k === 'u') handleMarkUnsold()
       else if (k === 'enter') handleAwardSell()

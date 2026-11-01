@@ -72,7 +72,7 @@ export function Topbar({
   }
 
   const accountTitle = isAuctioneer
-    ? 'Lock auctioneer mode'
+    ? 'Sign out of superadmin'
     : ownerTeamName
     ? `Sign out of ${ownerTeamName}`
     : 'Sign in'

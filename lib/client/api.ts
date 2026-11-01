@@ -188,7 +188,7 @@ export const apiAuction = {
       isUnsoldRound?: boolean
     }>('/api/auction', {
       method: 'POST',
-      body: JSON.stringify({ action: 'spin' })
+      body: JSON.stringify({ action: 'spin', scope })
     }),
   nominate: (playerId: number) =>
     request<{
@@ -209,7 +209,7 @@ export const apiAuction = {
       method: 'POST',
       body: JSON.stringify({ action: 'bid', teamName, amount })
     }),
-  sell: (teamName: string, price: number, playerId?: number) =>
+  sell: (teamName: string, price: number, playerId?: number, seenBid?: number) =>
     request<{
       success: boolean
       player: Player
@@ -220,7 +220,7 @@ export const apiAuction = {
       message: string
     }>('/api/auction', {
       method: 'POST',
-      body: JSON.stringify({ action: 'sell', teamName, price, playerId })
+      body: JSON.stringify({ action: 'sell', teamName, price, playerId, seenBid })
     }),
   unsold: () =>
     request<{

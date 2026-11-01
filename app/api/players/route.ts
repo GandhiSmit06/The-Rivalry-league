@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { serverError } from '@/lib/server/respond'
 import { requireAuth } from '@/lib/server/token'
 import {
   getAllPlayers,
@@ -12,8 +13,8 @@ export async function GET() {
   try {
     const players = await getAllPlayers()
     return NextResponse.json({ success: true, players })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }
 
@@ -35,8 +36,8 @@ export async function POST(req: Request) {
     }
     const players = await getAllPlayers()
     return NextResponse.json({ success: true, player: result.player, players })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }
 
@@ -53,8 +54,8 @@ export async function PUT(req: Request) {
     const result = await updatePlayer(Number(id), updates)
     const players = await getAllPlayers()
     return NextResponse.json({ ...result, players }, { status: result.success ? 200 : 400 })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }
 
@@ -71,7 +72,7 @@ export async function DELETE(req: Request) {
     const result = await deletePlayer(Number(id))
     const players = await getAllPlayers()
     return NextResponse.json({ ...result, players }, { status: result.success ? 200 : 400 })
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err)
   }
 }
