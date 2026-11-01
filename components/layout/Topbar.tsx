@@ -93,7 +93,7 @@ export function Topbar({
                   onChange={e => onUpdateSeason(e.target.value)}
                   aria-label="Season"
                 >
-                  {SEASONS.map(s => <option key={s} value={s}>S{s}</option>)}
+                  {[...new Set([...SEASONS, season])].map(s => <option key={s} value={s}>S{s}</option>)}
                 </select>
               ) : (
                 <span className="season-chip">S{season}</span>
