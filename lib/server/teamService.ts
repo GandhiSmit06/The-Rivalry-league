@@ -69,6 +69,7 @@ export async function deleteTeam(id: string): Promise<{ success: boolean; messag
   }
 
   db.teams = db.teams.filter(t => t.id !== target.id)
+  if (db.ownerLogins) delete db.ownerLogins[target.id]
   await writeDb(db)
   return { success: true, message: `Team "${target.name}" and references deleted` }
 }

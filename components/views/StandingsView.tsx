@@ -16,16 +16,16 @@ export function StandingsView({ teams, matches }: { teams: Team[]; matches: Matc
   )
 
   return (
-    <div className="content-page">
+    <div>
       <div className="page-heading">
         <div>
           <span className="section-kicker">POINTS TABLE · {completed}/{matches.length} MATCHES PLAYED</span>
-          <h2>League <em>Table.</em></h2>
+          <h2>League <em>leaderboard</em></h2>
         </div>
       </div>
 
       {teams.length === 0 ? (
-        <div className="empty-focus"><span>NO FRANCHISES YET</span><p>Register teams to see the table.</p></div>
+        <div className="empty-state"><h3>No franchises yet</h3><p>Register teams to see the leaderboard.</p></div>
       ) : (
         <div className="standings-wrap">
           <table className="standings">

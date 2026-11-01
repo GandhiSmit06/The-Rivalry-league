@@ -58,7 +58,7 @@ export function TossModal({
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>
         </div>
 
-        <div style={{ margin: '14px 0 20px', padding: '10px', background: '#0e1626', borderRadius: '10px', border: '1px solid var(--line)' }}>
+        <div style={{ margin: '14px 0 20px', padding: '10px', background: 'var(--bg-elevated)', borderRadius: '10px', border: '1px solid var(--line)' }}>
           <b style={{ fontSize: '15px', color: 'var(--text)' }}>{match.teamA}</b>
           <span style={{ margin: '0 8px', color: 'var(--gold)', fontWeight: 800 }}>VS</span>
           <b style={{ fontSize: '15px', color: 'var(--text)' }}>{match.teamB}</b>
@@ -73,8 +73,8 @@ export function TossModal({
               width: '110px',
               height: '110px',
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #FFDF70 0%, #D4AF37 50%, #996515 100%)',
-              border: '4px solid #FFF1A8',
+              background: 'linear-gradient(135deg, #e7cf9f 0%, #a9834a 100%)',
+              border: '4px solid #c5a880',
               boxShadow: '0 8px 30px rgba(255, 200, 61, 0.4), inset 0 0 15px rgba(0,0,0,0.4)',
               display: 'grid',
               placeItems: 'center',
@@ -83,7 +83,7 @@ export function TossModal({
               transform: `rotateY(${coinRotation}deg)`
             }}
           >
-            <div style={{ textAlign: 'center', color: '#3A2800' }}>
+            <div style={{ textAlign: 'center', color: 'var(--primary)' }}>
               <Coins size={32} />
               <b style={{ display: 'block', fontSize: '13px', fontWeight: 900, letterSpacing: '1px', marginTop: '2px' }}>
                 {tossResult || (flipping ? 'FLIPPING' : 'TOSS')}
@@ -102,7 +102,7 @@ export function TossModal({
         </button>
 
         {tossResult && (
-          <div style={{ background: '#090e18', border: '1px solid var(--line-strong)', borderRadius: '10px', padding: '14px', textAlign: 'left', marginBottom: '16px' }}>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--line-strong)', borderRadius: '10px', padding: '14px', textAlign: 'left', marginBottom: '16px' }}>
             <span style={{ fontSize: '10px', color: 'var(--gold)', letterSpacing: '1.2px', fontWeight: 800 }}>RESULT: {tossResult}</span>
             <div style={{ marginTop: '10px' }}>
               <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>

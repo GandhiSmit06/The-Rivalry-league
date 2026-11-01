@@ -1,3 +1,5 @@
+> Superseded: this describes the old dark theme. The app now uses the Stitch "Warm Luxury Editorial Athletics" design in app/globals.css.
+
 # The Rivalry League — Frontend Design Brief
 
 Hand this whole file to another AI/designer. It describes every screen, component, state, interaction and the current visual language, so the UI can be redesigned without reading the code.

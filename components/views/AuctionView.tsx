@@ -1,16 +1,55 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
-import {
-  Shuffle,
-  Gavel,
-  Plus,
-  Lock,
-  Users,
-  Search,
-  Zap
-} from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Shuffle, Gavel, Plus, Search, X, Zap, RotateCcw } from 'lucide-react'
 import type { Player, Team } from '@/lib/server/db'
+import { TeamBadge } from '@/components/common/TeamBadge'
+
+export type WheelScope = 'auto' | 'unsold' | 'all'
+type PoolFilter = 'ALL' | 'Upcoming' | 'Sold' | 'Unsold'
+
+const WEDGE_COLORS = ['#6e472b', '#a9834a', '#543117', '#8c5e3c', '#3f2a1a', '#c5a880', '#725b38', '#94704a']
+const UNSOLD_COLORS = ['#7a2e24', '#a8553f']
+const INCREMENTS = [
+  { value: 100, label: 'Increment', tone: '' },
+  { value: 250, label: 'Standard', tone: 'mid' },
+  { value: 500, label: 'Power bid', tone: 'mid' },
+  { value: 1000, label: 'Mega bid', tone: 'hot' }
+]
+
+const CX = 160
+const CY = 160
+const R = 146
+
+function buildWedges(list: Player[], unsoldRound: boolean) {
+  const n = list.length
+  if (n === 0) return []
+  const step = 360 / n
+  const textRadius = n > 14 ? 112 : n > 8 ? 106 : 98
+
+  return list.map((p, i) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180
+    const start = toRad(i * step - 90)
+    const end = toRad((i + 1) * step - 90)
+    const midDeg = (i + 0.5) * step - 90
+    const mid = toRad(midDeg)
+    const point = (rad: number, r: number) =>
+      `${(CX + r * Math.cos(rad)).toFixed(2)} ${(CY + r * Math.sin(rad)).toFixed(2)}`
+
+    return {
+      id: p.id,
+      number: p.number,
+      color: unsoldRound ? UNSOLD_COLORS[i % 2] : WEDGE_COLORS[i % WEDGE_COLORS.length],
+      path:
+        n === 1
+          ? `M ${CX} ${CY - R} A ${R} ${R} 0 1 0 ${CX} ${CY + R} A ${R} ${R} 0 1 0 ${CX} ${CY - R} Z`
+          : `M ${CX} ${CY} L ${point(start, R)} A ${R} ${R} 0 ${step > 180 ? 1 : 0} 1 ${point(end, R)} Z`,
+      tx: (CX + textRadius * Math.cos(mid)).toFixed(2),
+      ty: (CY + textRadius * Math.sin(mid)).toFixed(2),
+      rotate: (midDeg + 90).toFixed(2)
+    }
+  })
+}
 
 export function AuctionView({
   players,
@@ -19,23 +58,21 @@ export function AuctionView({
   bid,
   leader,
   spinning,
+  wheelScope,
+  setWheelScope,
   awardTeam,
   setAwardTeam,
   awardPrice,
   setAwardPrice,
   maxSquadSize,
-  isAuctioneer,
   spin,
   nominate,
   makeBid,
   awardSell,
   unsold,
-  onBack,
   onAddPlayer,
   onAddTeam,
   onAdjustBudget,
-  onUpdateSquadLimit,
-  onUnlock,
   onDirectSell,
   onReopenAllUnsold
 }: {
@@ -45,751 +82,408 @@ export function AuctionView({
   bid: number
   leader: Team | null
   spinning: boolean
+  wheelScope: WheelScope
+  setWheelScope: (scope: WheelScope) => void
   awardTeam: string
   setAwardTeam: (team: string) => void
   awardPrice: number
   setAwardPrice: (p: number) => void
   maxSquadSize: number
-  isAuctioneer: boolean
   spin: () => void
   nominate: (id: number) => void
   makeBid: (t: Team, increment?: number) => void
   awardSell: () => void
   unsold: () => void
-  onBack: () => void
   onAddPlayer: () => void
   onAddTeam: () => void
   onAdjustBudget: (t: Team) => void
-  onUpdateSquadLimit: (limit: number) => void
-  onUnlock: () => void
   onDirectSell: (player?: Player) => void
-  onReopenAllUnsold?: () => void
+  onReopenAllUnsold: () => void
 }) {
+  const [tab, setTab] = useState<'stage' | 'pool'>('stage')
+  const [poolFilter, setPoolFilter] = useState<PoolFilter>('ALL')
   const [poolSearch, setPoolSearch] = useState('')
   const [wheelAngle, setWheelAngle] = useState(0)
-  const [mobileTab, setMobileTab] = useState<'stage' | 'bids' | 'pool'>('stage')
 
-  const upcoming = useMemo(() => {
-    return players.filter(p => p.status === 'Upcoming')
+  const counts = useMemo(() => {
+    const by = (status: Player['status']) => players.filter(p => p.status === status)
+    return { upcoming: by('Upcoming'), unsold: by('Unsold'), sold: by('Sold') }
   }, [players])
 
-  const unsoldPlayers = useMemo(() => {
-    return players.filter(p => p.status === 'Unsold')
-  }, [players])
+  const isUnsoldRound =
+    wheelScope === 'unsold' ||
+    (wheelScope === 'auto' && counts.upcoming.length === 0 && counts.unsold.length > 0)
 
-  // When initial upcoming queue finishes, automatically transition wheel to Unsold players!
-  const isUnsoldRound = upcoming.length === 0 && unsoldPlayers.length > 0
-  const activeWheelPlayers = isUnsoldRound ? unsoldPlayers : upcoming
-  const N = activeWheelPlayers.length
+  const wheelPlayers =
+    wheelScope === 'all' ? players : isUnsoldRound ? counts.unsold : counts.upcoming
 
-  // On mobile, if a player is drawn, focus on the Stage
-  useEffect(() => {
-    if (current) {
-      setMobileTab('stage')
-    }
-  }, [current])
+  const wedges = useMemo(() => buildWedges(wheelPlayers, isUnsoldRound), [wheelPlayers, isUnsoldRound])
+  const n = wheelPlayers.length
 
   const filteredPool = useMemo(() => {
-    const source = isUnsoldRound ? unsoldPlayers : upcoming
-    if (!poolSearch.trim()) return source
     const q = poolSearch.toLowerCase().replace('#', '').trim()
-    return source.filter(
-      p => p.name.toLowerCase().includes(q) || String(p.number || '').includes(q)
-    )
-  }, [isUnsoldRound, upcoming, unsoldPlayers, poolSearch])
+    return players.filter(p => {
+      if (poolFilter !== 'ALL' && p.status !== poolFilter) return false
+      return !q || p.name.toLowerCase().includes(q) || String(p.number || '').includes(q)
+    })
+  }, [players, poolFilter, poolSearch])
 
-  // Realistic Casino / Tournament Wheel Spin Rotation Physics
+  useEffect(() => {
+    if (current) setTab('stage')
+  }, [current])
+
   useEffect(() => {
     if (spinning) {
-      const extraDegrees = (5 + Math.random() * 2) * 360 + Math.floor(Math.random() * 180)
-      setWheelAngle(prev => prev + extraDegrees)
+      setWheelAngle(prev => prev + (5 + Math.random() * 2) * 360 + Math.floor(Math.random() * 180))
     }
   }, [spinning])
 
-  const WEDGE_COLORS = [
-    '#111c30', // Deep Navy
-    '#2c1524', // Rich Wine
-    '#0c2725', // Forest Emerald
-    '#36220e', // Dark Amber Gold
-    '#1c1a3c', // Royal Indigo
-    '#30161b', // Crimson Ruby
-    '#0f2835', // Ocean Sapphire
-    '#2e2410'  // Bronze Gold
+  const selectedTeam = teams.find(t => t.name === awardTeam) || null
+  const selectedFull = !!selectedTeam && selectedTeam.players >= maxSquadSize
+
+  const filters: Array<{ id: PoolFilter; label: string; count: number }> = [
+    { id: 'ALL', label: 'All', count: players.length },
+    { id: 'Upcoming', label: 'Available', count: counts.upcoming.length },
+    { id: 'Sold', label: 'Sold', count: counts.sold.length },
+    { id: 'Unsold', label: 'Unsold', count: counts.unsold.length }
   ]
 
-  // Generate SVG Pie Slices with Radial Labels for active players (upcoming or unsold round)
-  const wedges = useMemo(() => {
-    if (N === 0) return []
-    const cx = 160
-    const cy = 160
-    const r = 146
-    const step = 360 / N
+  const scopes: Array<{ id: WheelScope; label: string }> = [
+    { id: 'auto', label: `Available (${counts.upcoming.length || counts.unsold.length})` },
+    { id: 'unsold', label: `Unsold (${counts.unsold.length})` },
+    { id: 'all', label: `Everyone (${players.length})` }
+  ]
 
-    return activeWheelPlayers.map((p, i) => {
-      const startAngleDeg = i * step - 90
-      const endAngleDeg = (i + 1) * step - 90
-      const midAngleDeg = (i + 0.5) * step - 90
-
-      const startRad = (startAngleDeg * Math.PI) / 180
-      const endRad = (endAngleDeg * Math.PI) / 180
-      const midRad = (midAngleDeg * Math.PI) / 180
-
-      const x1 = cx + r * Math.cos(startRad)
-      const y1 = cy + r * Math.sin(startRad)
-      const x2 = cx + r * Math.cos(endRad)
-      const y2 = cy + r * Math.sin(endRad)
-
-      const largeArc = step > 180 ? 1 : 0
-
-      const textRadius = N > 14 ? 112 : N > 8 ? 106 : 98
-      const tx = cx + textRadius * Math.cos(midRad)
-      const ty = cy + textRadius * Math.sin(midRad)
-      const textRot = midAngleDeg + 90
-
-      const pathData =
-        N === 1
-          ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 0 ${cx} ${cy + r} A ${r} ${r} 0 1 0 ${cx} ${cy - r} Z`
-          : `M ${cx} ${cy} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`
-
-      return {
-        id: p.id,
-        number: p.number,
-        name: p.name,
-        color: isUnsoldRound ? (i % 2 === 0 ? '#3b1219' : '#1e142b') : WEDGE_COLORS[i % WEDGE_COLORS.length],
-        pathData,
-        tx: tx.toFixed(2),
-        ty: ty.toFixed(2),
-        textRot: textRot.toFixed(2)
-      }
-    })
-  }, [activeWheelPlayers, N, isUnsoldRound])
-
-  const rimStuds = useMemo(() => {
-    const cx = 160
-    const cy = 160
-    const r = 152
-    const count = 24
-    return Array.from({ length: count }).map((_, i) => {
-      const rad = ((i * (360 / count) - 90) * Math.PI) / 180
-      return {
-        x: (cx + r * Math.cos(rad)).toFixed(2),
-        y: (cy + r * Math.sin(rad)).toFixed(2)
-      }
-    })
-  }, [])
+  const idleMessage =
+    players.length === 0
+      ? { title: 'No players registered', text: 'Add players to the league pool to begin.' }
+      : n === 0
+      ? { title: 'Nothing left on this wheel', text: 'Switch the wheel to Everyone, or see the final squads under Schedule → Results.' }
+      : { title: 'Spin or nominate a player', text: 'Spin the wheel, or open Pool and nominate any player.' }
 
   return (
-    <div className="auction-page">
-      <div className="page-heading">
-        <div>
-          <span className="section-kicker">AUCTIONEER ARENA · BASE PRICE ₹500</span>
-          <h2>The <em>Gavel</em> is in your hands.</h2>
-        </div>
-        <div className="room-status" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            className="ghost-btn"
-            style={{ padding: '6px 12px', fontSize: '11px', color: 'var(--gold)', borderColor: 'rgba(255, 200, 61, 0.4)' }}
-            onClick={() => onDirectSell()}
-            title="Auctioneer: Sell any player to any team with custom price"
-          >
-            <Gavel size={13} /> Direct Sell / Assign
-          </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--panel)', border: '1px solid var(--line)', padding: '6px 12px', borderRadius: '10px' }}>
-            <Users size={13} style={{ color: 'var(--gold)' }} />
-            <span style={{ fontSize: '10px', color: 'var(--muted)', fontWeight: 600 }}>Squad Limit:</span>
-            <select
-              value={maxSquadSize}
-              onChange={e => onUpdateSquadLimit(Number(e.target.value))}
-              style={{ background: 'none', border: 0, color: 'var(--gold)', fontWeight: 800, fontSize: '11px', outline: 'none', cursor: 'pointer' }}
-            >
-              {[3, 4, 5, 6, 7, 8, 9, 10, 11].map(n => (
-                <option key={n} value={n} style={{ background: '#0e1626', color: '#fff' }}>
-                  {n} Players/Team
-                </option>
-              ))}
-            </select>
-          </div>
-          <span className="live-dot" /> LIVE ROOM
-          <span style={{ fontSize: '10px', color: 'var(--muted)' }} title="Keyboard shortcuts">
-            ⌨ S spin · 1-9 bid · Enter sell · U unsold
-          </span>
-          {!isAuctioneer && (
-            <button className="auctioneer-pill locked" onClick={onUnlock}>
-              <Lock size={12} /> Unlock Auctioneer Controls
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Mobile-Only Arena Switcher Pills */}
-      <div className="mobile-auction-switcher">
-        <button
-          type="button"
-          className={mobileTab === 'stage' ? 'm-tab-btn active' : 'm-tab-btn'}
-          onClick={() => setMobileTab('stage')}
-        >
-          <Gavel size={13} />
-          <span>Stage {current ? `(#${current.number})` : ''}</span>
+    <div>
+      <div className="segmented mobile-auction-switcher">
+        <button className={tab === 'stage' ? 'active' : ''} onClick={() => setTab('stage')}>
+          Auction {current ? `(#${current.number})` : ''}
         </button>
-        <button
-          type="button"
-          className={mobileTab === 'bids' ? 'm-tab-btn active' : 'm-tab-btn'}
-          onClick={() => setMobileTab('bids')}
-        >
-          <Users size={13} />
-          <span>Bids & Teams</span>
-        </button>
-        <button
-          type="button"
-          className={mobileTab === 'pool' ? 'm-tab-btn active' : 'm-tab-btn'}
-          onClick={() => setMobileTab('pool')}
-        >
-          <Search size={13} />
-          <span>{isUnsoldRound ? `Unsold (${unsoldPlayers.length})` : `Pool (${upcoming.length})`}</span>
+        <button className={tab === 'pool' ? 'active' : ''} onClick={() => setTab('pool')}>
+          Pool ({players.length})
         </button>
       </div>
 
-      <div className="auction-layout">
-        {/* Left Pool Queue with dedicated, spacious player cards */}
-        <aside className={`pool-card ${mobileTab === 'pool' ? 'mobile-visible' : 'mobile-hidden'}`}>
-          <div className="card-label">
-            <span>{isUnsoldRound ? 'RE-AUCTION POOL' : 'PLAYER POOL'}</span>
-            <b style={isUnsoldRound ? { color: '#f87171' } : undefined}>
-              {isUnsoldRound ? `${unsoldPlayers.length} UNSOLD` : `${upcoming.length} UPCOMING`}
-            </b>
-          </div>
+      <div className={tab === 'stage' ? '' : 'mobile-hidden'}>
+        <div className="auction-grid">
+          <div style={{ display: 'grid', gap: 12 }}>
+            <section className="card lot-card">
+              <div className="left">
+                <span className="ping" />
+                <div style={{ minWidth: 0 }}>
+                  <h3>{current ? `Lot #${current.number} · Live` : 'Live auction'}</h3>
+                  <small>
+                    {isUnsoldRound ? 'Re-auction round' : 'Dream XI draft'} · {counts.sold.length} sold
+                  </small>
+                </div>
+              </div>
+              <span className="count-ring" title="Players left on this wheel">{n}</span>
+            </section>
 
-          {isUnsoldRound && onReopenAllUnsold && (
-            <button
-              className="ghost-btn"
-              onClick={onReopenAllUnsold}
-              style={{
-                width: '100%',
-                padding: '5px 8px',
-                fontSize: '10px',
-                color: 'var(--gold)',
-                borderColor: 'rgba(255, 200, 61, 0.35)',
-                margin: '6px 0 2px'
-              }}
-              title="Reset all unsold players back to Upcoming pool"
-            >
-              ↺ Reset All Unsold to Upcoming
-            </button>
-          )}
+            {current ? (
+              <section className="card player-spot">
+                <div className="row">
+                  <span className="avatar">
+                    {current.initials}
+                    <span className="tag">#{current.number}</span>
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="chips">
+                      {current.role && <span className="pill sand">{current.role}</span>}
+                      <span className="pill">Base ₹{(current.base || 500).toLocaleString()}</span>
+                      {current.status !== 'Upcoming' && (
+                        <span className={current.status === 'Sold' ? 'pill green' : 'pill red'}>
+                          {current.status === 'Sold' ? `Re-auction · ${current.soldTo}` : 'Re-auction'}
+                        </span>
+                      )}
+                    </div>
+                    <h3>{current.name}</h3>
+                    {current.style && <span className="meta">{current.style}</span>}
+                  </div>
+                </div>
+              </section>
+            ) : (
+              <section className="card wheel-card">
+                <div className="filter-row scope-row" role="group" aria-label="Who is on the wheel">
+                  {scopes.map(s => (
+                    <button
+                      key={s.id}
+                      className={wheelScope === s.id ? 'filter-active' : ''}
+                      onClick={() => setWheelScope(s.id)}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
 
-          <div style={{ margin: '8px 0 6px', position: 'relative' }}>
-            <input
-              type="text"
-              placeholder="Search by name or #..."
-              value={poolSearch}
-              onChange={e => setPoolSearch(e.target.value)}
-              style={{
-                width: '100%',
-                background: 'rgba(9, 14, 25, 0.8)',
-                border: '1px solid var(--line)',
-                borderRadius: '8px',
-                padding: '7px 10px 7px 28px',
-                fontSize: '11px',
-                color: 'var(--text)',
-                outline: 'none'
-              }}
-            />
-            <Search size={12} style={{ position: 'absolute', left: '9px', top: '9px', color: 'var(--muted)' }} />
-          </div>
+                <div className={spinning ? 'spinner spinning' : 'spinner'}>
+                  <div
+                    className="spinner-svg-wrap"
+                    style={{
+                      transform: `rotate(${wheelAngle}deg)`,
+                      transition: spinning ? 'transform 2.8s cubic-bezier(0.12, 0.85, 0.22, 1)' : 'none'
+                    }}
+                  >
+                    <svg viewBox="0 0 320 320" style={{ display: 'block', overflow: 'visible' }} aria-hidden="true">
+                      <defs>
+                        <linearGradient id="wheelRim" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#e7cf9f" />
+                          <stop offset="50%" stopColor="#a9834a" />
+                          <stop offset="100%" stopColor="#c5a880" />
+                        </linearGradient>
+                      </defs>
+                      <circle cx={CX} cy={CY} r="158" fill="#2c241e" />
+                      {n === 0 ? (
+                        <circle cx={CX} cy={CY} r={R} fill="#ebe3d5" />
+                      ) : (
+                        wedges.map(w => (
+                          <g key={w.id}>
+                            <path d={w.path} fill={w.color} stroke="#2c241e" strokeWidth={n > 1 ? 1.2 : 0} />
+                            <text
+                              x={w.tx}
+                              y={w.ty}
+                              transform={`rotate(${w.rotate}, ${w.tx}, ${w.ty})`}
+                              textAnchor="middle"
+                              dominantBaseline="central"
+                              fill="#ffffff"
+                              fontFamily="'Space Grotesk', sans-serif"
+                              fontWeight="700"
+                              fontSize={n > 18 ? 10 : n > 12 ? 12 : n > 6 ? 14 : 16}
+                            >
+                              #{w.number}
+                            </text>
+                          </g>
+                        ))
+                      )}
+                      <circle cx={CX} cy={CY} r="148" fill="none" stroke="url(#wheelRim)" strokeWidth="5" />
+                    </svg>
+                  </div>
 
-          <div className="pool-list" style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
-            {filteredPool.length === 0 ? (
-              <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
-                <p style={{ margin: '0 0 12px' }}>
-                  {N === 0
-                    ? players.length === 0
-                      ? 'No players in tournament pool.'
-                      : 'All players processed.'
-                    : 'No matching players found.'}
-                </p>
-                {players.length === 0 && (
-                  <button className="primary-btn" style={{ padding: '8px 14px', fontSize: '11px' }} onClick={onAddPlayer}>
-                    <Plus size={14} /> Add Player (₹500 Base)
+                  <button className="spinner-center" onClick={spin} disabled={spinning || n === 0} aria-label="Spin the wheel">
+                    {spinning ? (
+                      <>
+                        <Shuffle size={20} className="spin-icon-anim" />
+                        <small>DRAWING</small>
+                      </>
+                    ) : (
+                      <>
+                        <Shuffle size={20} style={{ opacity: n === 0 ? 0.4 : 1 }} />
+                        <small>{n === 0 ? 'EMPTY' : `SPIN (${n})`}</small>
+                      </>
+                    )}
+                  </button>
+                  <div className="pointer" />
+                </div>
+
+                <div className="idle-note">
+                  <b>{idleMessage.title}</b>
+                  {idleMessage.text}
+                </div>
+
+                {counts.unsold.length > 0 && (
+                  <button className="text-btn" onClick={onReopenAllUnsold}>
+                    <RotateCcw size={13} /> Return all unsold to Available
                   </button>
                 )}
-              </div>
-            ) : (
-              filteredPool.map(p => {
-                const isSelected = current?.id === p.id
-                return (
-                  <div
-                    className={isSelected ? 'pool-player selected' : 'pool-player'}
-                    key={p.id}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
-                        <span className="pool-num-badge">#{p.number}</span>
-                        <b
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            color: isSelected ? 'var(--gold)' : 'var(--text)'
-                          }}
-                        >
-                          {p.name}
-                        </b>
-                      </div>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          color: 'var(--gold)',
-                          fontWeight: 800,
-                          fontFamily: 'JetBrains Mono, monospace',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        ₹{(p.base || 500).toLocaleString()}
-                      </span>
-                    </div>
+              </section>
+            )}
+          </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '6px' }}>
-                      <button
-                        className="nominate-badge"
-                        onClick={() => nominate(p.id)}
-                        title="Put directly on auction block"
-                        style={{
-                          padding: '6px 8px',
-                          fontSize: '10px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '4px',
-                          borderRadius: '6px'
-                        }}
-                      >
-                        <Gavel size={11} /> Nominate
-                      </button>
-                      <button
-                        className="direct-sell-btn"
-                        onClick={() => onDirectSell(p)}
-                        title="Directly sell to a franchise"
-                        style={{
-                          padding: '6px 8px',
-                          fontSize: '10px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '4px',
-                          borderRadius: '6px'
-                        }}
-                      >
-                        <Zap size={11} /> ⚡ Sell
-                      </button>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <section className="card bid-hero">
+              <div className="row">
+                <span className="kicker">Current leading bid</span>
+                {leader && <span className="pill"><span className="live-dot" /> Active bidder</span>}
+              </div>
+              <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+                <div className="bid-amount">₹{bid.toLocaleString()}</div>
+                {leader && (
+                  <div className="leader-chip">
+                    <span className="team-dot" style={{ background: leader.color }} />
+                    <div>
+                      <b>{leader.name}</b>
+                      <small>₹{leader.purse.toLocaleString()} left in purse</small>
                     </div>
                   </div>
-                )
-              })
-            )}
-          </div>
-          <button className="text-btn" onClick={onBack}>← Back to dashboard</button>
-        </aside>
-
-        {/* Center Stage & Smooth Animated SVG Tournament Wheel */}
-        <section className={`stage ${mobileTab === 'stage' ? 'mobile-visible' : 'mobile-hidden'}`}>
-          <div className="stage-top">
-            <span>AUCTION BLOCK</span>
-            {isUnsoldRound ? (
-              <span className="draw-filter" style={{ color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)' }}>
-                🔥 RE-AUCTION: {unsoldPlayers.length} UNSOLD
-              </span>
-            ) : (
-              <span className="draw-filter">{upcoming.length} REMAINING</span>
-            )}
-          </div>
-
-          {isUnsoldRound && (
-            <div style={{
-              background: 'linear-gradient(90deg, rgba(220, 38, 38, 0.2), rgba(217, 119, 6, 0.2))',
-              border: '1px solid rgba(239, 68, 68, 0.5)',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              marginBottom: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              color: '#fca5a5',
-              fontSize: '11px',
-              fontWeight: 700,
-              letterSpacing: '0.5px'
-            }}>
-              <Shuffle size={13} style={{ color: '#fbbf24' }} />
-              <span>ROUND 2: RE-AUCTIONING UNSOLD PLAYERS ({unsoldPlayers.length} IN POOL)</span>
-            </div>
-          )}
-
-          <div className={spinning ? 'spinner spinning' : 'spinner'}>
-            <div
-              className="spinner-svg-wrap"
-              style={{
-                transform: `rotate(${wheelAngle}deg)`,
-                transition: spinning
-                  ? 'transform 2.8s cubic-bezier(0.12, 0.85, 0.22, 1)'
-                  : 'none'
-              }}
-            >
-              <svg
-                viewBox="0 0 320 320"
-                width="320"
-                height="320"
-                style={{ display: 'block', overflow: 'visible' }}
-              >
-                <defs>
-                  <radialGradient id="hubGrad" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#1a2842" />
-                    <stop offset="60%" stopColor="#0d1424" />
-                    <stop offset="100%" stopColor="#050810" />
-                  </radialGradient>
-                  <linearGradient id="goldRim" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#ffd875" />
-                    <stop offset="35%" stopColor="#c89224" />
-                    <stop offset="70%" stopColor="#ffe699" />
-                    <stop offset="100%" stopColor="#946510" />
-                  </linearGradient>
-                </defs>
-
-                {/* Base Wheel Rim Background */}
-                <circle cx="160" cy="160" r="158" fill="#070c16" />
-
-                {/* Wedges */}
-                {N === 0 ? (
-                  <circle
-                    cx="160"
-                    cy="160"
-                    r="146"
-                    fill="#0b1322"
-                    stroke="rgba(255, 200, 61, 0.2)"
-                    strokeWidth="2"
-                  />
-                ) : (
-                  wedges.map(w => (
-                    <g key={w.id}>
-                      <path
-                        d={w.pathData}
-                        fill={w.color}
-                        stroke="#070c14"
-                        strokeWidth={N > 1 ? '1.5' : '0'}
-                      />
-                      <text
-                        x={w.tx}
-                        y={w.ty}
-                        transform={`rotate(${w.textRot}, ${w.tx}, ${w.ty})`}
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        fill="#ffffff"
-                        fontFamily="'Bebas Neue', sans-serif"
-                        fontWeight="700"
-                        fontSize={N > 18 ? '11' : N > 12 ? '13' : N > 6 ? '15' : '17'}
-                        letterSpacing="0.5"
-                        style={{
-                          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.9))',
-                          userSelect: 'none'
-                        }}
-                      >
-                        #{w.number}
-                      </text>
-                    </g>
-                  ))
-                )}
-
-                {/* Outer Golden Bezel Rim */}
-                <circle
-                  cx="160"
-                  cy="160"
-                  r="148"
-                  fill="none"
-                  stroke="url(#goldRim)"
-                  strokeWidth="5"
-                />
-
-                {/* Rim Brass Studs */}
-                {rimStuds.map((s, idx) => (
-                  <circle
-                    key={idx}
-                    cx={s.x}
-                    cy={s.y}
-                    r="2.2"
-                    fill="#ffd875"
-                    stroke="#946510"
-                    strokeWidth="0.8"
-                  />
-                ))}
-
-                {/* Center Hub Graphic Ring */}
-                <circle
-                  cx="160"
-                  cy="160"
-                  r="48"
-                  fill="url(#hubGrad)"
-                  stroke="url(#goldRim)"
-                  strokeWidth="3"
-                />
-              </svg>
-
-              {/* Center Interactive Hub (Fixed overlay on center of wheel) */}
-              <div className="spinner-center" onClick={spin} title="Click to spin!">
-                {spinning ? (
-                  <>
-                    <Shuffle size={20} className="spin-icon-anim" />
-                    <small>DRAWING #</small>
-                  </>
-                ) : current ? (
-                  <>
-                    <span className="center-label">{isUnsoldRound ? 'RE-AUCTION' : 'DRAWN'}</span>
-                    <span className="center-num">#{current.number}</span>
-                  </>
-                ) : N === 0 ? (
-                  <>
-                    <Shuffle size={18} style={{ opacity: 0.35 }} />
-                    <small style={{ color: 'var(--muted)' }}>ALL SOLD</small>
-                  </>
-                ) : isUnsoldRound ? (
-                  <>
-                    <Shuffle size={20} style={{ color: '#fbbf24' }} />
-                    <small style={{ color: '#fca5a5' }}>RE-SPIN ({N})</small>
-                  </>
-                ) : (
-                  <>
-                    <Shuffle size={20} />
-                    <small>SPIN ({N})</small>
-                  </>
                 )}
               </div>
-            </div>
+            </section>
 
-            {/* Pointer / Needle */}
-            <div className="pointer" />
-          </div>
-
-          {current ? (
-            <div className="player-focus">
-              <div className="focus-avatar">
-                <span style={{ fontSize: '18px', fontWeight: 800 }}>#{current.number}</span>
+            <section>
+              <div className="card-label">
+                <span>Select bidding franchise</span>
+                <b>{maxSquadSize}/team limit</b>
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                  <span className="spotlight-num-badge">PLAYER #{current.number}</span>
-                  <span className={current.status === 'Unsold' ? 'status unsold' : 'status upcoming'}>
-                    {current.status === 'Unsold' ? 'RE-AUCTION NOMINATION' : 'ACTIVE NOMINATION'}
-                  </span>
+              {teams.length === 0 ? (
+                <div className="empty-state" style={{ padding: 22 }}>
+                  <p>No franchises yet.</p>
+                  <button className="primary-btn btn-sm" onClick={onAddTeam}><Plus size={14} /> Add Franchise</button>
                 </div>
-                <h3>{current.name}</h3>
-              </div>
-              <div className="base-badge">
-                <small>BASE PRICE</small>
-                <b>₹{(current.base || 500).toLocaleString()}</b>
-              </div>
-            </div>
-          ) : (
-            <div className="empty-focus">
-              <span>
-                {players.length === 0
-                  ? 'NO PLAYERS REGISTERED'
-                  : N === 0
-                  ? 'AUCTION COMPLETED · ALL PLAYERS SOLD!'
-                  : isUnsoldRound
-                  ? `RE-AUCTION ROUND: ${unsoldPlayers.length} UNSOLD PLAYERS`
-                  : 'SPIN OR NOMINATE PLAYER'}
-              </span>
-              <p>
-                {players.length === 0
-                  ? 'Add players to your league pool to begin (default base ₹500).'
-                  : N === 0
-                  ? 'All registered players have been drafted into franchises! Review rosters on Results tab.'
-                  : isUnsoldRound
-                  ? 'All initial upcoming players finished. The wheel is now loaded with all Unsold players for the re-auction round!'
-                  : 'Auctioneer: Spin the wheel to draw by player number or click Nominate beside any player.'}
-              </p>
-            </div>
-          )}
-
-          <button
-            className="spin-btn"
-            onClick={spin}
-            disabled={spinning || N === 0}
-            style={{
-              width: '100%',
-              maxWidth: '340px',
-              marginTop: '14px',
-              ...(isUnsoldRound
-                ? {
-                    background: 'linear-gradient(135deg, #b91c1c 0%, #ea580c 100%)',
-                    borderColor: '#fca5a5',
-                    color: '#ffffff',
-                    boxShadow: '0 0 25px rgba(239, 68, 68, 0.45)'
-                  }
-                : {})
-            }}
-          >
-            <Shuffle size={16} className={spinning ? 'spin-icon-anim' : ''} />{' '}
-            {spinning
-              ? 'Selecting Random Player...'
-              : N === 0
-              ? 'All Players Processed'
-              : isUnsoldRound
-              ? `SPIN RE-AUCTION WHEEL (${unsoldPlayers.length} UNSOLD)`
-              : `SPIN THE WHEEL (${upcoming.length} IN POOL)`}
-          </button>
-        </section>
-
-        {/* Right Bidding Stage & Live Auctioneer Desk */}
-        <section className={`bid-card ${mobileTab === 'bids' ? 'mobile-visible' : 'mobile-hidden'}`}>
-          <div className="card-label">
-            <span>LIVE BIDDING CONTROL</span>
-            <b>{teams.length} FRANCHISES</b>
-          </div>
-
-          <div className="current-bid">
-            <small>CURRENT TOP BID</small>
-            <h3>₹{bid.toLocaleString()}</h3>
-            <p>
-              Leader:{' '}
-              <b>
-                {leader ? (
-                  <span style={{ color: leader.color }}>
-                    {leader.name} ({leader.short})
-                  </span>
-                ) : (
-                  'No Bids Placed'
-                )}
-              </b>
-            </p>
-          </div>
-
-          <div className="bid-team-list">
-            {teams.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--muted)', fontSize: '12px' }}>
-                <p>No franchises available.</p>
-                <button className="primary-btn" style={{ padding: '6px 12px', fontSize: '11px', margin: '8px auto 0' }} onClick={onAddTeam}>
-                  <Plus size={14} /> Add Franchise
-                </button>
-              </div>
-            ) : (
-              teams.map(t => {
-                const isFull = t.players >= maxSquadSize
-                return (
-                  <button
-                    key={t.id}
-                    className="bid-row"
-                    onClick={() => makeBid(t)}
-                    disabled={!current || t.purse <= bid || isFull}
-                  >
-                    <span className="team-dot" style={{ background: t.color }} />
-                    <span>
-                      <b>{t.short} ({t.name})</b>
-                      <small>₹{t.purse.toLocaleString()} left · {t.players}/{maxSquadSize} {isFull ? '[FULL]' : ''}</small>
-                    </span>
-                    <strong>{isFull ? 'FULL' : `BID +₹${bid < 1000 ? 100 : bid < 5000 ? 250 : 500}`}</strong>
-                  </button>
-                )
-              })
-            )}
-          </div>
-
-          {current ? (
-            <div className="award-box">
-              <h4><Gavel size={14} /> AUCTIONEER DECISION DESK: SELL PLAYER</h4>
-              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-                Selling: <b style={{ color: 'var(--text)' }}>#{current.number} {current.name}</b>
-              </div>
-              <div className="award-row">
-                <select
-                  value={awardTeam}
-                  onChange={e => setAwardTeam(e.target.value)}
-                  title="Choose winning team"
-                >
-                  <option value="">-- Choose Winning Team --</option>
+              ) : (
+                <div className="team-select">
                   {teams.map(t => {
-                    const isFull = t.players >= maxSquadSize
+                    const full = t.players >= maxSquadSize
                     return (
-                      <option key={t.id} value={t.name} disabled={isFull}>
-                        {t.name} (Purse: ₹{t.purse.toLocaleString()}) {isFull ? `[FULL]` : `[${t.players}/${maxSquadSize}]`}
-                      </option>
+                      <button
+                        key={t.id}
+                        className={awardTeam === t.name ? 'team-opt selected' : 'team-opt'}
+                        onClick={() => setAwardTeam(t.name)}
+                        disabled={full}
+                      >
+                        <span className="nm">
+                          <span className="team-dot" style={{ background: t.color }} />
+                          <span>{t.name}</span>
+                        </span>
+                        <small>{full ? 'FULL' : `₹${(t.purse / 1000).toFixed(1)}k`}</small>
+                      </button>
                     )
                   })}
-                </select>
-                <input
-                  type="number"
-                  value={awardPrice}
-                  onChange={e => setAwardPrice(Number(e.target.value) || 0)}
-                  min={current.base || 500}
-                  step={50}
-                  placeholder="Price"
-                  title="Winning Price in ₹"
-                />
-              </div>
+                </div>
+              )}
+            </section>
 
-              {/* Quick increment price chips */}
-              <div style={{ display: 'flex', gap: '6px', margin: '8px 0 12px' }}>
-                {[100, 250, 500, 1000].map(inc => (
+            <section>
+              <div className="card-label"><span>Quick bid increments</span></div>
+              <div className="inc-grid">
+                {INCREMENTS.map(inc => (
                   <button
-                    key={inc}
-                    type="button"
-                    className="ghost-btn"
-                    style={{ flex: 1, padding: '4px', fontSize: '10px' }}
-                    onClick={() => setAwardPrice(awardPrice + inc)}
+                    key={inc.value}
+                    className={`inc-btn ${inc.tone}`}
+                    onClick={() => selectedTeam && makeBid(selectedTeam, inc.value)}
+                    disabled={!current || !selectedTeam || selectedFull || selectedTeam.purse < bid + inc.value}
                   >
-                    +₹{inc}
+                    <b>+₹{inc.value.toLocaleString()}</b>
+                    <small>{inc.label}</small>
                   </button>
                 ))}
               </div>
+            </section>
 
-              <div className="hammer-actions">
-                <button
-                  className="sell-btn"
-                  onClick={awardSell}
-                  disabled={!awardTeam}
-                >
-                  <Gavel size={14} /> Sell to {awardTeam || 'Team'} (₹{awardPrice.toLocaleString()})
-                </button>
-                <button className="unsold-btn" onClick={unsold}>
-                  Unsold
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginTop: '16px', padding: '14px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '10px', border: '1px dashed var(--line)', textAlign: 'center', fontSize: '11px', color: 'var(--muted)' }}>
-              Spin the wheel or click <b>Nominate</b> on any player in the left queue to open the auction bidding & hammer desk.
-            </div>
-          )}
+            {current && (
+              <section>
+                <div className="price-edit">
+                  <label htmlFor="hammer-price">Hammer price (₹)</label>
+                  <input
+                    id="hammer-price"
+                    type="number"
+                    min={0}
+                    step={50}
+                    value={awardPrice}
+                    onChange={e => setAwardPrice(Number(e.target.value) || 0)}
+                    style={{ maxWidth: 150 }}
+                  />
+                </div>
+                <div className="hammer-row">
+                  <button className="sell-btn" onClick={awardSell} disabled={!awardTeam}>
+                    <Gavel size={18} /> Sold to {awardTeam || 'team'}
+                  </button>
+                  <button className="unsold-btn" onClick={unsold}>
+                    <X size={16} /> Unsold
+                  </button>
+                </div>
+              </section>
+            )}
+
+            <button className="ghost-btn btn-block" onClick={() => onDirectSell()}>
+              <Zap size={15} /> Direct Sell / Assign
+            </button>
+          </div>
+        </div>
+
+        <section style={{ marginTop: 16 }}>
+          <div className="card-label">
+            <span>Franchise purse &amp; slots</span>
+            <span className="desktop-only">S spin · 1-9 bid · Enter sell · U unsold</span>
+          </div>
+          <div className="rail">
+            {teams.map(t => (
+              <button className="purse-card" key={t.id} onClick={() => onAdjustBudget(t)} title="Adjust purse" style={{ textAlign: 'left' }}>
+                <span className="top">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <TeamBadge team={t} size={24} />
+                    <b style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.short}</b>
+                  </span>
+                  <span className="pill sand">{t.players}/{maxSquadSize}</span>
+                </span>
+                <strong>₹{t.purse.toLocaleString()}</strong>
+                <small>Spent ₹{t.spent.toLocaleString()}</small>
+              </button>
+            ))}
+          </div>
         </section>
       </div>
 
-      {/* Live Franchise Budget Strip */}
-      <div className="team-strip">
-        {teams.length === 0 ? (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-            No franchises configured. Auctioneer: Create teams to track live budgets.
+      <section className={tab === 'pool' ? '' : 'mobile-hidden'} style={{ marginTop: 16 }}>
+        <div className="subhead">
+          <h3>Player pool</h3>
+          <button className="text-btn" onClick={onAddPlayer}><Plus size={14} /> Add player</button>
+        </div>
+
+        <div className="search-box">
+          <Search size={16} />
+          <input
+            type="search"
+            placeholder="Search by name or #number"
+            value={poolSearch}
+            onChange={e => setPoolSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="filter-row">
+          {filters.map(f => (
+            <button
+              key={f.id}
+              className={poolFilter === f.id ? 'filter-active' : ''}
+              onClick={() => setPoolFilter(f.id)}
+            >
+              {f.label} ({f.count})
+            </button>
+          ))}
+        </div>
+
+        {filteredPool.length === 0 ? (
+          <div className="empty-state" style={{ padding: 22 }}>
+            <p>{players.length === 0 ? 'No players in the pool yet.' : 'No players match this filter.'}</p>
+            {players.length === 0 && (
+              <button className="primary-btn btn-sm" onClick={onAddPlayer}><Plus size={14} /> Add Player</button>
+            )}
           </div>
         ) : (
-          teams.map(t => (
-            <div className="strip-team" key={t.id}>
-              <span className="team-logo" style={{ background: t.color, color: '#0A0F1F' }}>
-                {t.short}
-              </span>
-              <div>
-                <b>{t.name}</b>
-                <small>₹{t.purse.toLocaleString()} · {t.players}/{maxSquadSize}</small>
+          <div className="pool-list">
+            {filteredPool.map(p => (
+              <div key={p.id} className={current?.id === p.id ? 'pool-row selected' : 'pool-row'}>
+                <div className="top">
+                  <span className="nm">
+                    <span className="num-badge">#{p.number}</span>
+                    <b>{p.name}</b>
+                  </span>
+                  <span className={`status ${p.status.toLowerCase()}`}>{p.status}</span>
+                </div>
+                <div className="top" style={{ marginTop: 4, fontSize: 12, color: 'var(--muted)' }}>
+                  <span>{p.status === 'Sold' ? `${p.soldTo}` : p.role || 'Base price'}</span>
+                  <span className="mono">₹{(p.soldPrice || p.base || 500).toLocaleString()}</span>
+                </div>
+                <div className="acts">
+                  <button className="mini-btn fill" onClick={() => nominate(p.id)}>
+                    <Gavel size={12} /> {p.status === 'Upcoming' ? 'Nominate' : 'Re-auction'}
+                  </button>
+                  <button className="mini-btn" onClick={() => onDirectSell(p)}>
+                    <Zap size={12} /> {p.status === 'Sold' ? 'Reassign' : 'Sell'}
+                  </button>
+                </div>
               </div>
-              <button
-                className="strip-btn"
-                onClick={() => onAdjustBudget(t)}
-                title="Adjust budget"
-              >
-                Purse
-              </button>
-            </div>
-          ))
+            ))}
+          </div>
         )}
-      </div>
+      </section>
     </div>
   )
 }

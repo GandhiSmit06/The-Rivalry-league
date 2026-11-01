@@ -32,7 +32,7 @@ export function BulkImportModal({
         </div>
         <form onSubmit={handleSubmit} style={{ marginTop: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <label>
-            PASTE PLAYER NAMES (ONE PER LINE OR &quot;Name, BasePrice&quot;)
+            ONE PLAYER PER LINE: NAME, BASE PRICE, ROLE (LAST TWO OPTIONAL)
             <textarea
               placeholder="Rohit Sharma&#10;Jasprit Bumrah&#10;Virat Kohli&#10;Hardik Pandya"
               value={text}
@@ -41,7 +41,7 @@ export function BulkImportModal({
                 width: '100%',
                 height: '160px',
                 marginTop: '8px',
-                background: '#090e18',
+                background: 'var(--bg-elevated)',
                 border: '1px solid var(--line)',
                 borderRadius: '8px',
                 color: 'var(--text)',

@@ -1,182 +1,238 @@
 'use client'
 
-import { Plus, Trash2, DollarSign, Users } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Plus, Trash2, Users, Wallet, ArrowRight, Upload, KeyRound, ImageOff } from 'lucide-react'
 import type { Team, Player } from '@/lib/server/db'
+import { TeamBadge } from '@/components/common/TeamBadge'
+import { fileToLogo } from '@/lib/client/image'
+import { roleShort } from '@/lib/shared/roles'
+
+const BASE_PRICE = 500
+
+function formatPurse(amount: number): string {
+  return amount >= 1000 ? `₹${Math.round(amount / 1000)}K` : `₹${amount}`
+}
 
 export function TeamsView({
   teams,
   players,
   maxSquadSize,
   isAuctioneer,
+  ownerTeamId,
   onAddTeam,
   onDeleteTeam,
   onAdjustBudget,
-  onUpdateSquadLimit
+  onOwnerLogin,
+  onUploadLogo,
+  onRemoveLogo,
+  notify
 }: {
   teams: Team[]
   players: Player[]
   maxSquadSize: number
   isAuctioneer: boolean
+  ownerTeamId: string | null
   onAddTeam: () => void
   onDeleteTeam: (name: string) => void
   onAdjustBudget: (t: Team) => void
-  onUpdateSquadLimit: (limit: number) => void
+  onOwnerLogin: (t: Team) => void
+  onUploadLogo: (logo: string) => void
+  onRemoveLogo: () => void
+  notify: (message: string) => void
 }) {
+  const [teamFilter, setTeamFilter] = useState('ALL')
+  const [openRosters, setOpenRosters] = useState<string[]>([])
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const leaguePurse = teams.reduce((sum, t) => sum + t.purse + t.spent, 0)
+  const visible = teamFilter === 'ALL' ? teams : teams.filter(t => t.id === teamFilter)
+
+  const toggleRoster = (id: string) =>
+    setOpenRosters(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      onUploadLogo(await fileToLogo(file))
+    } catch (err) {
+      notify((err as Error).message)
+    }
+  }
+
   return (
-    <div className="content-page">
+    <div>
       <div className="page-heading">
         <div>
-          <span className="section-kicker">FRANCHISE ROSTER & PURSE CONTROL</span>
-          <h2>The <em>Franchises.</em></h2>
+          <h2>Teams &amp; <em>rosters</em></h2>
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--panel)', border: '1px solid var(--line)', padding: '6px 12px', borderRadius: '10px' }}>
-            <Users size={14} style={{ color: 'var(--gold)' }} />
-            <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Squad Quota:</span>
-            <select
-              value={maxSquadSize}
-              onChange={e => onUpdateSquadLimit(Number(e.target.value))}
-              style={{ background: 'none', border: 0, color: 'var(--gold)', fontWeight: 800, fontSize: '12px', outline: 'none', cursor: 'pointer' }}
-            >
-              {[3, 4, 5, 6, 7, 8, 9, 10, 11].map(n => (
-                <option key={n} value={n} style={{ background: '#0e1626', color: '#fff' }}>
-                  {n} Players/Team
-                </option>
-              ))}
-            </select>
-          </div>
-          <button className="primary-btn" onClick={onAddTeam}>
-            <Plus size={16} /> Add Franchise
-          </button>
-        </div>
+        {isAuctioneer && (
+          <button className="primary-btn btn-sm" onClick={onAddTeam}><Plus size={14} /> Add Franchise</button>
+        )}
       </div>
 
+      <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleFile} />
+
       {teams.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '80px 20px', background: 'var(--panel)', border: '1px dashed var(--line)', borderRadius: '16px' }}>
-          <Users size={44} style={{ color: 'var(--gold)', marginBottom: '16px' }} />
-          <h3 style={{ fontFamily: 'Bebas Neue', fontSize: '32px', margin: '0 0 8px' }}>No Franchises Registered</h3>
-          <p style={{ color: 'var(--muted)', fontSize: '13px', maxWidth: '380px', margin: '0 auto 24px', lineHeight: 1.5 }}>
-            Auctioneer: Create teams to begin allocating purse budgets and assembling rosters.
-          </p>
-          <button className="primary-btn" onClick={onAddTeam}>
-            <Plus size={16} /> Add First Franchise
-          </button>
+        <div className="empty-state">
+          <Users size={38} />
+          <h3>No franchises registered</h3>
+          <p>Create teams to begin allocating purse budgets and assembling rosters.</p>
+          {isAuctioneer && (
+            <button className="primary-btn" onClick={onAddTeam}><Plus size={16} /> Add First Franchise</button>
+          )}
         </div>
       ) : (
-        <div className="teams-grid">
-          {teams.map(t => {
-            const teamPlayers = players.filter(p => p.soldTo === t.name)
-            const isFull = t.players >= maxSquadSize
-            const spentPct = Math.min(100, Math.round(((t.spent || 0) / (t.purse + t.spent || 1)) * 100))
-            return (
-              <article className="team-card" key={t.id}>
-                {/* Accent top border strip with franchise color */}
-                <div style={{ height: '3px', width: '100%', background: t.color }} />
+        <>
+          <div className="summary-strip">
+            <div><b>{teams.length}</b><small>Franchises</small></div>
+            <div><b>{formatPurse(leaguePurse)}</b><small>League purse</small></div>
+            <div><b>{maxSquadSize}</b><small>Squad cap</small></div>
+          </div>
 
-                <div className="team-card-top">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span className="team-logo" style={{ background: t.color, color: '#0A0F1F' }}>
-                      {t.short}
-                    </span>
-                    <div>
-                      <h3>{t.name}</h3>
+          <div className="filter-row roles">
+            <button className={teamFilter === 'ALL' ? 'filter-active' : ''} onClick={() => setTeamFilter('ALL')}>
+              All Teams
+            </button>
+            {teams.map(t => (
+              <button
+                key={t.id}
+                className={teamFilter === t.id ? 'filter-active' : ''}
+                onClick={() => setTeamFilter(t.id)}
+              >
+                <span className="team-dot" style={{ background: t.color }} /> {t.name}
+              </button>
+            ))}
+          </div>
+
+          <div className="teams-grid">
+            {visible.map(t => {
+              const roster = players.filter(p => p.soldTo === t.name)
+              const total = t.purse + t.spent
+              const spentPct = total ? Math.round((t.spent / total) * 100) : 0
+              const openSlots = Math.max(0, maxSquadSize - t.players)
+              const maxBid = openSlots ? Math.max(0, t.purse - (openSlots - 1) * BASE_PRICE) : 0
+              const marquee = [...roster].sort((a, b) => (b.soldPrice || 0) - (a.soldPrice || 0))[0]
+              const isMine = ownerTeamId === t.id
+              const rosterOpen = openRosters.includes(t.id)
+
+              const mix = new Map<string, number>()
+              roster.forEach(p => {
+                if (p.role) mix.set(p.role, (mix.get(p.role) || 0) + 1)
+              })
+
+              return (
+                <article className="team-card" key={t.id}>
+                  <div className="team-card-top">
+                    <TeamBadge team={t} />
+                    <div className="info">
+                      <h3>{t.name} <span className="pill">{t.short}</span></h3>
                       <p>Owner: {t.owner}</p>
                     </div>
+                    <span className={openSlots ? 'pill' : 'pill dark'}>{openSlots ? 'Active' : 'Full'}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <button
-                      className="budget-badge"
-                      onClick={() => onAdjustBudget(t)}
-                      title="Adjust franchise purse"
-                    >
-                      <DollarSign size={12} /> Purse
+
+                  {isMine && (
+                    <div className="team-actions">
+                      <button className="primary-btn" onClick={() => fileInput.current?.click()}>
+                        <Upload size={14} /> {t.logo ? 'Change logo' : 'Upload logo'}
+                      </button>
+                      <button className="ghost-btn" onClick={onRemoveLogo} disabled={!t.logo}>
+                        <ImageOff size={14} /> Remove
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="purse-box">
+                    <div className="r">
+                      <small>Remaining purse</small>
+                      <span>
+                        <b className="big">₹{t.purse.toLocaleString()}</b>
+                        <span className="cap"> / ₹{total.toLocaleString()}</span>
+                      </span>
+                    </div>
+                    <div className="bar"><i style={{ width: `${100 - spentPct}%` }} /></div>
+                    <div className="meta">
+                      <span>Spent: ₹{t.spent.toLocaleString()} ({spentPct}%)</span>
+                      <span>Max bid: ₹{maxBid.toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  <div className="slots-row">
+                    <span className="l"><Users size={16} /> {t.players} / {maxSquadSize} Players</span>
+                    <span className="pill sand">{openSlots} open slots</span>
+                  </div>
+
+                  <div className="mix-grid">
+                    <div className="mix-box">
+                      <small>Squad mix</small>
+                      <div className="chips">
+                        {mix.size === 0 ? (
+                          <span style={{ fontSize: 12, color: 'var(--muted)' }}>No roles yet</span>
+                        ) : (
+                          [...mix].map(([role, n]) => (
+                            <span className="pill" key={role}>{n} {roleShort(role)}</span>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                    <div className="mix-box">
+                      <small>Marquee buy</small>
+                      {marquee ? (
+                        <>
+                          <div className="pl">{marquee.name}</div>
+                          <div className="pr">₹{(marquee.soldPrice || 0).toLocaleString()}</div>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>None yet</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {rosterOpen && (
+                    <div className="roster-list">
+                      {roster.length === 0 ? (
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>No players acquired yet.</span>
+                      ) : (
+                        roster.map(p => (
+                          <div className="roster-row" key={p.id}>
+                            <span className="nm"><span className="num-badge">#{p.number}</span> {p.name}</span>
+                            <b className="p">₹{(p.soldPrice || 0).toLocaleString()}</b>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  <div className="team-actions">
+                    {isAuctioneer ? (
+                      <button className="ghost-btn" onClick={() => onAdjustBudget(t)}>
+                        <Wallet size={14} /> Budget
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    <button className="primary-btn" onClick={() => toggleRoster(t.id)}>
+                      {rosterOpen ? 'Hide roster' : 'Roster'} <ArrowRight size={14} />
                     </button>
-                    <button
-                      className="icon-btn"
-                      onClick={() => onDeleteTeam(t.name)}
-                      title="Delete franchise"
-                      style={{ width: '30px', height: '30px' }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
                   </div>
-                </div>
 
-                <div className="team-card-stats">
-                  <div>
-                    <small>PURSE LEFT</small>
-                    <b style={{ color: 'var(--gold)' }}>₹{t.purse.toLocaleString()}</b>
-                  </div>
-                  <div>
-                    <small>SQUAD</small>
-                    <b>
-                      {t.players} <i>/ {maxSquadSize}</i>
-                    </b>
-                  </div>
-                  <div>
-                    <small>TOTAL SPENT</small>
-                    <b>₹{t.spent.toLocaleString()}</b>
-                  </div>
-                </div>
-
-                <div className="team-progress">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--muted)', marginBottom: '5px' }}>
-                    <span>Budget Spent</span>
-                    <span>{spentPct}%</span>
-                  </div>
-                  <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.06)', borderRadius: '999px', overflow: 'hidden' }}>
-                    <span
-                      style={{
-                        display: 'block',
-                        height: '100%',
-                        width: `${spentPct}%`,
-                        background: t.color,
-                        borderRadius: '999px',
-                        transition: 'width 0.3s ease'
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ padding: '12px 20px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
-                    Roster Slots ({t.players}/{maxSquadSize})
-                  </span>
-                  <span
-                    style={{
-                      fontSize: '10px',
-                      color: isFull ? 'var(--red)' : 'var(--green)',
-                      fontWeight: 800,
-                      letterSpacing: '0.5px'
-                    }}
-                  >
-                    {isFull ? 'SQUAD FULL' : `${maxSquadSize - t.players} OPEN`}
-                  </span>
-                </div>
-
-                <div className="squad-mini">
-                  {teamPlayers.map(p => (
-                    <span
-                      key={p.id}
-                      title={`#${p.number} ${p.name} (₹${p.soldPrice?.toLocaleString()}) · ${p.role}`}
-                    >
-                      #{p.number}
-                    </span>
-                  ))}
-                  {Array.from({ length: Math.max(0, maxSquadSize - t.players) }).map((_, i) => (
-                    <span
-                      className="empty-slot"
-                      key={i}
-                      title={`Slot ${t.players + i + 1} Open`}
-                    >
-                      +
-                    </span>
-                  ))}
-                </div>
-              </article>
-            )
-          })}
-        </div>
+                  {isAuctioneer && (
+                    <div className="team-actions">
+                      <button className="ghost-btn" onClick={() => onOwnerLogin(t)}>
+                        <KeyRound size={14} /> Owner login
+                      </button>
+                      <button className="danger-btn" style={{ borderRadius: 10 }} onClick={() => onDeleteTeam(t.name)}>
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
+                  )}
+                </article>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )

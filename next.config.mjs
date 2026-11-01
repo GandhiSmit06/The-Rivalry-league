@@ -3,6 +3,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  agentRules: false,
   images: {
     unoptimized: true,
   },

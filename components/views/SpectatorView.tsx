@@ -2,7 +2,11 @@
 
 import { Lock, Gavel } from 'lucide-react'
 import type { Player, Team } from '@/lib/server/db'
+import { TeamBadge } from '@/components/common/TeamBadge'
 
+const OWNER_INCREMENTS = [100, 250, 500, 1000]
+
+/** Read-only live auction for viewers; a signed-in owner also gets bid buttons for their team. */
 export function SpectatorView({
   players,
   teams,
@@ -10,6 +14,8 @@ export function SpectatorView({
   bid,
   leader,
   maxSquadSize,
+  ownerTeam,
+  onOwnerBid,
   onUnlock
 }: {
   players: Player[]
@@ -18,22 +24,30 @@ export function SpectatorView({
   bid: number
   leader: Team | null
   maxSquadSize: number
+  ownerTeam: Team | null
+  onOwnerBid: (increment: number) => void
   onUnlock: () => void
 }) {
   const upcoming = players.filter(p => p.status === 'Upcoming').length
   const unsold = players.filter(p => p.status === 'Unsold').length
   const sold = players.filter(p => p.status === 'Sold').length
+  const squadFull = !!ownerTeam && ownerTeam.players >= maxSquadSize
+  const isLeading = !!ownerTeam && leader?.id === ownerTeam.id
 
   return (
-    <div className="spectator">
+    <div>
       <div className="page-heading">
         <div>
-          <span className="section-kicker"><span className="live-dot" /> LIVE AUCTION · SPECTATOR VIEW</span>
-          <h2>On the <em>Block.</em></h2>
+          <span className="section-kicker">
+            <span className="live-dot" /> Live auction{ownerTeam ? ` · ${ownerTeam.name}` : ''}
+          </span>
+          <h2>On the <em>block</em></h2>
         </div>
-        <button className="ghost-btn" onClick={onUnlock}>
-          <Lock size={14} /> Auctioneer login
-        </button>
+        {!ownerTeam && (
+          <button className="ghost-btn btn-sm" onClick={onUnlock}>
+            <Lock size={14} /> Sign in
+          </button>
+        )}
       </div>
 
       <section className="spectator-stage">
@@ -47,9 +61,7 @@ export function SpectatorView({
             </div>
             <p className="spectator-leader">
               {leader ? (
-                <>
-                  Leading: <b style={{ color: leader.color }}>{leader.name}</b>
-                </>
+                <>Leading: <b style={{ color: leader.color }}>{leader.name}</b></>
               ) : (
                 <>Base price ₹{(current.base || 500).toLocaleString()} · no bids yet</>
               )}
@@ -62,8 +74,8 @@ export function SpectatorView({
               {players.length === 0
                 ? 'No players registered yet.'
                 : upcoming + unsold === 0
-                ? 'Auction complete - see Results for the final squads.'
-                : 'Waiting for the auctioneer to draw the next player…'}
+                ? 'Auction complete - see Schedule → Results for the final squads.'
+                : 'Waiting for the next player to be drawn…'}
             </p>
           </div>
         )}
@@ -73,6 +85,35 @@ export function SpectatorView({
           <span><b>{unsold}</b> unsold</span>
         </div>
       </section>
+
+      {ownerTeam && (
+        <section className="card card-pad" style={{ marginTop: 14 }}>
+          <div className="card-label" style={{ alignItems: 'center' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <TeamBadge team={ownerTeam} size={28} /> Bid for {ownerTeam.name}
+            </span>
+            <b>₹{ownerTeam.purse.toLocaleString()} left · {ownerTeam.players}/{maxSquadSize}</b>
+          </div>
+          <div className="inc-grid">
+            {OWNER_INCREMENTS.map((inc, i) => (
+              <button
+                key={inc}
+                className={`inc-btn ${i === 3 ? 'hot' : i ? 'mid' : ''}`}
+                onClick={() => onOwnerBid(inc)}
+                disabled={!current || squadFull || isLeading || ownerTeam.purse < bid + inc}
+              >
+                <b>+₹{inc.toLocaleString()}</b>
+                <small>Bid ₹{(bid + inc).toLocaleString()}</small>
+              </button>
+            ))}
+          </div>
+          {(isLeading || squadFull) && (
+            <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, textAlign: 'center' }}>
+              {squadFull ? 'Your squad is full.' : 'You hold the top bid.'}
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="spectator-teams">
         {teams.map(t => (

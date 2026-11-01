@@ -26,6 +26,7 @@ export type Team = {
   spent: number
   players: number
   tagline: string
+  logo?: string // small data URL uploaded by the team owner
 }
 
 export type InningsScore = {
@@ -78,6 +79,15 @@ export type DatabaseSchema = {
   players: Player[]
   matches: Match[]
   auctionState: AuctionState
+  ownerLogins?: Record<string, { loginId: string; pinHash: string }> // keyed by team id, never sent to clients
+  rev?: number // bumped on every write so concurrent writers cannot overwrite each other
+}
+
+/** Another request saved first. The caller should re-read and try again. */
+export class DbConflictError extends Error {
+  constructor() {
+    super('The auction changed at the same moment - please try again')
+  }
 }
 
 const DB_DIR = path.join(process.cwd(), 'data')
@@ -227,16 +237,22 @@ export async function readDb(): Promise<DatabaseSchema> {
 export async function writeDb(data: DatabaseSchema): Promise<void> {
   const sql = getSqlClient()
   if (sql) {
+    const baseRev = data.rev ?? 0
+    data.rev = baseRev + 1
     try {
       await ensureNeonDb(sql)
-      await sql`
-        INSERT INTO auction_store (id, data, updated_at)
-        VALUES ('default', ${JSON.stringify(data)}::jsonb, NOW())
-        ON CONFLICT (id) DO UPDATE
-        SET data = EXCLUDED.data, updated_at = NOW();
-      `
+      // Only applies if nobody else saved since this copy was read
+      const rows = (await sql`
+        UPDATE auction_store
+        SET data = ${JSON.stringify(data)}::jsonb, updated_at = NOW()
+        WHERE id = 'default' AND COALESCE((data->>'rev')::int, 0) = ${baseRev}
+        RETURNING id;
+      `) as Array<Record<string, any>>
+      if (rows.length === 0) throw new DbConflictError()
       return
     } catch (err) {
+      data.rev = baseRev
+      if (err instanceof DbConflictError) throw err
       console.error('[Neon Postgres Write Warning, saving locally]:', err)
     }
   }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/server/token'
+import { getOwnerTeamId, requireAuth } from '@/lib/server/token'
 import {
   getAuctionSnapshot,
   spinWheel,
@@ -20,15 +20,28 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
-  const denied = requireAuth(req)
-  if (denied) return denied
+const OWNER_INCREMENTS = [100, 250, 500, 1000]
 
+export async function POST(req: Request) {
   try {
-    const { action, playerId, teamName, amount, price } = await req.json()
+    const { action, playerId, teamName, amount, increment, price, scope } = await req.json()
+
+    // Team owners may only bid, and only for their own team
+    const ownerTeamId = getOwnerTeamId(req)
+    if (ownerTeamId && action === 'bid') {
+      if (!OWNER_INCREMENTS.includes(Number(increment))) {
+        return NextResponse.json({ success: false, message: 'Invalid bid increment' }, { status: 400 })
+      }
+      const result = await placeBid(ownerTeamId, 0, Number(increment))
+      return NextResponse.json(result, { status: result.success ? 200 : 400 })
+    }
+
+    const denied = requireAuth(req)
+    if (denied) return denied
 
     if (action === 'spin') {
-      const result = await spinWheel()
+      const allowed = ['auto', 'upcoming', 'unsold', 'all']
+      const result = await spinWheel(allowed.includes(scope) ? scope : 'auto')
       return NextResponse.json(result, { status: result.success ? 200 : 400 })
     }
 

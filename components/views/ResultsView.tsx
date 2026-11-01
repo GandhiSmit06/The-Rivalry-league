@@ -1,17 +1,8 @@
 'use client'
 
-import {
-  RotateCcw,
-  Trophy,
-  CircleDollarSign,
-  Users,
-  Medal,
-  Zap,
-  Sparkles,
-  ShieldAlert
-} from 'lucide-react'
+import { RotateCcw, Trophy } from 'lucide-react'
 import type { Player, Team } from '@/lib/server/db'
-import { StatCard } from '@/components/common/StatCard'
+import { TeamBadge } from '@/components/common/TeamBadge'
 
 export function ResultsView({
   players,
@@ -26,215 +17,100 @@ export function ResultsView({
   isAuctioneer: boolean
   onReset: () => void
 }) {
-  const soldPlayers = players.filter(p => p.status === 'Sold')
-  const best = [...soldPlayers].sort((a, b) => (b.soldPrice || 0) - (a.soldPrice || 0))[0]
+  const sold = players.filter(p => p.status === 'Sold')
+  const unsold = players.filter(p => p.status === 'Unsold')
+  const best = [...sold].sort((a, b) => (b.soldPrice || 0) - (a.soldPrice || 0))[0]
+  const totalSpent = sold.reduce((sum, p) => sum + (p.soldPrice || 0), 0)
 
   return (
-    <div className="content-page">
+    <div>
       <div className="page-heading">
         <div>
-          <span className="section-kicker">POST-AUCTION INTELLIGENCE & SQUADS</span>
-          <h2>Tournament <em>Results.</em></h2>
+          <h2>Auction <em>results</em></h2>
         </div>
-        <button
-          className="ghost-btn"
-          onClick={onReset}
-          style={{ color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.08)' }}
-          title="Reset all purchases and budgets back to initial state"
-        >
-          <RotateCcw size={15} /> Reset Entire Auction
-        </button>
+        {isAuctioneer && (
+          <button className="danger-btn btn-sm" onClick={onReset}>
+            <RotateCcw size={14} /> Reset Auction
+          </button>
+        )}
       </div>
 
-      {/* Marquee Buy Banner */}
       <div className="marquee-card">
-        <div className="marquee-trophy-wrap">
-          <Trophy size={32} />
+        <span className="tro"><Trophy size={28} /></span>
+        <div className="info">
+          <small className="lbl">Marquee buy</small>
+          <h3>{best ? `#${best.number} ${best.name}` : 'Awaiting the first hammer'}</h3>
+          <p>{best ? `Acquired by ${best.soldTo}` : 'No players have been sold yet.'}</p>
         </div>
-        <div className="marquee-info">
-          <span className="marquee-label">
-            <Sparkles size={12} style={{ color: 'var(--gold)' }} />
-            MARQUEE BUY OF THE TOURNAMENT
-          </span>
-          <h3>{best ? `#${best.number} ${best.name}` : 'Awaiting the first hammer strike'}</h3>
-          <p>
-            {best ? (
-              <>
-                Acquired by <strong style={{ color: '#fff' }}>{best.soldTo}</strong> for an exceptional{' '}
-                <strong style={{ color: 'var(--gold)' }}>₹{(best.soldPrice || 0).toLocaleString()}</strong>
-              </>
-            ) : (
-              'The Chief Auctioneer has not finalized any player sales yet. Spin the wheel to begin!'
-            )}
-          </p>
-        </div>
-        <div className="marquee-price-tag">
-          <small>RECORD BID</small>
-          <b>{best ? `₹${(best.soldPrice || 0).toLocaleString()}` : '₹0'}</b>
+        <div className="price">
+          <small>Record bid</small>
+          <b>₹{(best?.soldPrice || 0).toLocaleString()}</b>
         </div>
       </div>
 
-      {/* 4 Stat Overview Cards */}
-      <div className="stat-grid">
-        <StatCard
-          icon={<CircleDollarSign size={24} />}
-          label="TOTAL SPEND"
-          value={`₹${teams.reduce((a, t) => a + (t.spent || 0), 0).toLocaleString()}`}
-          color="gold"
-        />
-        <StatCard
-          icon={<Users size={24} />}
-          label="PLAYERS DRAFTED"
-          value={`${soldPlayers.length} / ${players.length}`}
-          color="cyan"
-        />
-        <StatCard
-          icon={<Medal size={24} />}
-          label="SQUADS ACTIVE"
-          value={`${teams.filter(t => t.players > 0).length} / ${teams.length}`}
-          color="green"
-        />
-        <StatCard
-          icon={<Zap size={24} />}
-          label="AUCTION STATUS"
-          value={
-            players.length === 0
-              ? 'EMPTY'
-              : players.every(p => p.status !== 'Upcoming')
-              ? 'COMPLETED'
-              : 'IN PLAY'
-          }
-          color="red"
-        />
+      <div className="stat-grid four">
+        <div className="stat-tile"><b>{sold.length}</b><small>Sold</small></div>
+        <div className="stat-tile"><b>{unsold.length}</b><small>Unsold</small></div>
+        <div className="stat-tile"><b>{players.length - sold.length - unsold.length}</b><small>Remaining</small></div>
+        <div className="stat-tile"><b>₹{totalSpent.toLocaleString()}</b><small>Total spent</small></div>
       </div>
 
-      {/* Confirmed Squads by Franchise */}
-      <div className="rosters-section">
-        <div className="rosters-title-bar">
-          <div>
-            <h3>CONFIRMED SQUADS & PLAYER ASSIGNMENTS</h3>
-            <p>Official franchise rosters finalized under Auctioneer hammer</p>
-          </div>
-          <span className="rosters-total-pill">
-            {teams.length} Franchises · Target {maxSquadSize} Players Each
-          </span>
-        </div>
-
-        <div className="roster-grid">
-          {teams.map(t => {
-            const teamSquad = players.filter(p => p.soldTo === t.name)
-            const count = teamSquad.length
-            const isFull = count >= maxSquadSize
-            const progressPct = Math.min(100, Math.round((count / (maxSquadSize || 1)) * 100))
-
-            return (
-              <div className="roster-card" key={t.id}>
-                {/* Franchise Header Banner */}
-                <div className="roster-head" style={{ borderLeftColor: t.color || 'var(--gold)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span
-                      className="team-monogram"
-                      style={{ background: t.color || '#22D3EE', color: '#090e18' }}
-                    >
-                      {t.short || t.name.slice(0, 2).toUpperCase()}
-                    </span>
-                    <div>
-                      <b className="team-title">{t.name}</b>
-                      <small className="team-owner">Owner: {t.owner}</small>
-                    </div>
+      <div className="subhead"><h3>Confirmed squads</h3></div>
+      <div className="roster-grid">
+        {teams.map(t => {
+          const roster = sold.filter(p => p.soldTo === t.name)
+          const fill = Math.min(100, Math.round((t.players / (maxSquadSize || 1)) * 100))
+          return (
+            <article className="roster-card" key={t.id}>
+              <div className="roster-head">
+                <TeamBadge team={t} size={44} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h3>{t.name}</h3>
+                  <small>Owner: {t.owner}</small>
+                </div>
+                <span className="pill sand">{t.players}/{maxSquadSize}</span>
+              </div>
+              <div className="roster-body">
+                {roster.length === 0 ? (
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>No players acquired yet.</span>
+                ) : (
+                  <div className="roster-list">
+                    {roster.map(p => (
+                      <div className="roster-row" key={p.id}>
+                        <span className="nm"><span className="num-badge">#{p.number}</span> {p.name}</span>
+                        <b className="p">₹{(p.soldPrice || 0).toLocaleString()}</b>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span className="roster-count-badge" style={isFull ? { color: '#34d399', borderColor: 'rgba(52, 211, 153, 0.4)' } : undefined}>
-                      {count}/{maxSquadSize} {isFull ? 'FULL' : 'PLAYERS'}
-                    </span>
-                    <span className="roster-spent-text">₹{(t.spent || 0).toLocaleString()} spent</span>
-                  </div>
-                </div>
-
-                {/* Squad Capacity Bar */}
-                <div className="roster-progress-track">
-                  <div
-                    className="roster-progress-fill"
-                    style={{
-                      width: `${progressPct}%`,
-                      background: isFull
-                        ? 'linear-gradient(90deg, #10b981, #34d399)'
-                        : `linear-gradient(90deg, ${t.color || 'var(--gold)'}, var(--gold))`
-                    }}
-                  />
-                </div>
-
-                {/* Players List or Empty Placeholder */}
-                <div className="roster-body">
-                  {teamSquad.length === 0 ? (
-                    <div className="roster-empty">
-                      <Users size={20} style={{ opacity: 0.35, marginBottom: '6px' }} />
-                      <p>No players acquired yet</p>
-                      <small>₹{(t.purse || 0).toLocaleString()} remaining purse</small>
-                    </div>
-                  ) : (
-                    <div className="roster-player-list">
-                      {teamSquad.map(p => (
-                        <div className="roster-player" key={p.id}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                            <span className="player-number-pill">#{p.number}</span>
-                            <span className="roster-name">{p.name}</span>
-                          </div>
-                          <span className="roster-price">₹{(p.soldPrice || p.base || 500).toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Card Footer with Remaining Purse */}
-                <div className="roster-footer">
-                  <span>Available Purse:</span>
-                  <b style={{ color: 'var(--gold)', fontFamily: 'JetBrains Mono, monospace' }}>
-                    ₹{(t.purse || 0).toLocaleString()}
-                  </b>
+                )}
+              </div>
+              <div className="roster-foot">
+                <div className="bar" style={{ margin: 0 }}><i style={{ width: `${fill}%` }} /></div>
+                <div className="meta">
+                  <span>Spent ₹{t.spent.toLocaleString()}</span>
+                  <span>₹{t.purse.toLocaleString()} left</span>
                 </div>
               </div>
-            )
-          })}
-        </div>
+            </article>
+          )
+        })}
       </div>
 
-      {/* Unsold Players Pool Section */}
-      {players.some(p => p.status === 'Unsold') && (
-        <div className="unsold-section">
-          <div className="unsold-title-bar">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldAlert size={18} style={{ color: '#f87171' }} />
-              <div>
-                <h3>UNSOLD PLAYERS POOL</h3>
-                <p>Eligible for Round 2 accelerated re-auction</p>
-              </div>
-            </div>
-            <span className="unsold-count-pill">
-              {players.filter(p => p.status === 'Unsold').length} Players Unsold
-            </span>
+      {unsold.length > 0 && (
+        <>
+          <div className="subhead">
+            <h3>Unsold players</h3>
+            <span className="pill red">{unsold.length}</span>
           </div>
-
           <div className="unsold-grid">
-            {players
-              .filter(p => p.status === 'Unsold')
-              .map(p => (
-                <div className="unsold-card" key={p.id}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="player-number-pill">#{p.number}</span>
-                    <b style={{ fontSize: '13px' }}>{p.name}</b>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span className="unsold-badge">UNSOLD</span>
-                    <small style={{ display: 'block', color: 'var(--muted)', fontSize: '10px', marginTop: '2px' }}>
-                      Base ₹{(p.base || 500).toLocaleString()}
-                    </small>
-                  </div>
-                </div>
-              ))}
+            {unsold.map(p => (
+              <div className="unsold-card" key={p.id}>
+                <span><span className="num-badge">#{p.number}</span> {p.name}</span>
+                <span className="mono">₹{(p.base || 500).toLocaleString()}</span>
+              </div>
+            ))}
           </div>
-        </div>
+        </>
       )}
     </div>
   )

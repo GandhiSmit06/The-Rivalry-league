@@ -1,16 +1,19 @@
 'use client'
 
 import {
-  Play,
-  CalendarDays,
+  Shield,
   Users,
-  Shuffle,
-  Gavel,
+  Swords,
+  CalendarDays,
+  ClipboardList,
+  Wallet,
+  ChevronRight,
+  Play,
   Coins,
-  ChevronRight
+  CircleDollarSign,
+  Gavel,
+  RefreshCw
 } from 'lucide-react'
-import { FeatureCard } from '@/components/common/FeatureCard'
-import { RivalryLeagueLogo } from '@/components/common/RivalryLeagueLogo'
 
 export function HomeView({
   season,
@@ -21,7 +24,8 @@ export function HomeView({
   defaultPurse,
   onStart,
   onManageTeams,
-  onManageSchedule
+  onManageSchedule,
+  onQuickToss
 }: {
   season: string
   teamsCount: number
@@ -32,109 +36,129 @@ export function HomeView({
   onStart: () => void
   onManageTeams: () => void
   onManageSchedule: () => void
+  onQuickToss: () => void
 }) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+
+  const rules = [
+    { icon: CircleDollarSign, title: '₹500 Base Price', text: 'Every player starts at ₹500 base price with custom incremental bids.' },
+    { icon: Users, title: 'Select Squad Size', text: `The auctioneer sets the exact player count per franchise (${maxSquadSize} players).` },
+    { icon: Gavel, title: 'Hammer Down', text: 'The auctioneer chooses which player goes to which team and sets the price.' },
+    { icon: Coins, title: 'Match Toss Flip', text: 'Interactive 3D coin toss with official Bat or Bowl calls.' }
+  ]
+
   return (
-    <div className="home">
-      <section className="hero">
-        <div className="hero-orbit orbit-one" />
-        <div className="hero-orbit orbit-two" />
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
-          <RivalryLeagueLogo size={84} animated={true} />
-        </div>
+    <div>
+      <section className="hero-card">
+        <div className="hero-mark"><Shield size={32} /></div>
         <div className="eyebrow">
-          <span className="live-dot" /> THE RIVALRY LEAGUE · AUCTIONEER COMMAND
-          <span className="season-pill">SEASON · {season}</span>
+          <span className="live-dot" /> The Rivalry League · Season {season}
         </div>
         <h1>
-          THE RIVALRY LEAGUE<br />
-          <em>DREAM XI DRAFT.</em>
+          The Rivalry League<br />
+          <em>Dream XI Draft.</em>
         </h1>
         <p className="hero-copy">
-          Official tournament cricket auction operated exclusively by the Auctioneer.<br className="desktop-only" />
-          Base price ₹500 per player. Dynamic season squad limits. Real-time franchise budgets.
+          Official tournament cricket auction. Base price ₹500 per player, dynamic squad limits
+          and real-time franchise budgets.
         </p>
         <div className="hero-actions">
           <button className="primary-btn" onClick={onStart}>
-            <Play size={16} fill="currentColor" /> Enter Auction Room <ChevronRight size={16} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+              <Play size={15} fill="currentColor" /> Enter Auction Room
+            </span>
+            <ChevronRight size={16} />
           </button>
           <button className="ghost-btn" onClick={onManageSchedule}>
-            <CalendarDays size={16} /> Tournament Schedule & Toss
+            <CalendarDays size={16} /> Tournament Schedule &amp; Toss
           </button>
         </div>
-        <div className="hero-meta">
-          <span>
-            <strong>{String(teamsCount).padStart(2, '0')}</strong> FRANCHISES
-          </span>
-          <span>
-            <strong>{String(playersCount).padStart(2, '0')}</strong> PLAYERS IN POOL
-          </span>
-          <span>
-            <strong>{String(matchesCount).padStart(2, '0')}</strong> FIXTURES
-          </span>
-          <span>
-            <strong>{maxSquadSize}</strong> SQUAD LIMIT
-          </span>
-          <span>
-            <strong>₹{defaultPurse.toLocaleString()}</strong> DEFAULT PURSE
-          </span>
+      </section>
+
+      <div className="card-label"><span>Tournament cap &amp; stats</span></div>
+      <section className="stat-grid four">
+        <div className="stat-tile">
+          <div className="top"><Shield size={16} /><span className="pill">Active</span></div>
+          <b>{pad(teamsCount)}</b><small>Franchises</small>
+        </div>
+        <div className="stat-tile">
+          <div className="top"><Users size={16} /><span className="pill">Draft</span></div>
+          <b>{pad(playersCount)}</b><small>Players in pool</small>
+        </div>
+        <div className="stat-tile">
+          <div className="top"><Swords size={16} /><span className="pill">Fixtures</span></div>
+          <b>{pad(matchesCount)}</b><small>Fixtures</small>
+        </div>
+        <div className="stat-tile">
+          <div className="top"><ClipboardList size={16} /><span className="pill">Limit</span></div>
+          <b>{maxSquadSize}</b><small>Squad limit</small>
+        </div>
+        <div className="stat-tile wide">
+          <Wallet size={20} style={{ color: 'var(--cognac)' }} />
+          <div>
+            <b>₹{defaultPurse.toLocaleString()}</b>
+            <small>Default purse per squad</small>
+          </div>
+          <span className="pill sand" style={{ marginLeft: 'auto' }}>Fixed cap</span>
         </div>
       </section>
 
-      <section className="feature-row">
-        <FeatureCard
-          icon={<Shuffle />}
-          num="01"
-          title="₹500 Base Price"
-          text="Every player starts at ₹500 base price with custom incremental bids."
-        />
-        <FeatureCard
-          icon={<Users />}
-          num="02"
-          title="Select Squad Size"
-          text={`Auctioneer sets exact player count per franchise (${maxSquadSize} players target).`}
-        />
-        <FeatureCard
-          icon={<Gavel />}
-          num="03"
-          title="Hammer Down"
-          text="Auctioneer chooses which player goes into which team and sets price."
-        />
-        <FeatureCard
-          icon={<Coins />}
-          num="04"
-          title="Match Toss Flip"
-          text="Interactive 3D coin toss simulator with official Bat or Bowl calls."
-        />
+      <section className="card sim-card">
+        <div className="head">
+          <h3>Match Day Simulator</h3>
+          <span className="pill sand">3D toss</span>
+        </div>
+        <button className="toss-panel" onClick={onQuickToss}>
+          <span>
+            <h4>Heads or Tails</h4>
+            <p>Official Bat or Bowl call, ready for the skippers</p>
+          </span>
+          <span className="spin-ring"><RefreshCw size={20} /></span>
+        </button>
       </section>
 
-      <section className="home-bottom">
-        <div>
-          <span className="section-kicker">AUCTIONEER DESK</span>
-          <h2>
-            Your room.<br />
-            <span>Your tournament.</span>
-          </h2>
+      <section style={{ marginTop: 28 }}>
+        <span className="kicker">Auction protocols</span>
+        <h2 className="section-title">Command guidelines</h2>
+        <div className="rule-list">
+          {rules.map((rule, i) => {
+            const Icon = rule.icon
+            return (
+              <div className="card rule-card" key={rule.title}>
+                <span className="ico"><Icon size={18} /></span>
+                <div>
+                  <h3>{rule.title}</h3>
+                  <p>{rule.text}</p>
+                </div>
+                <span className="num">{pad(i + 1)}</span>
+              </div>
+            )
+          })}
         </div>
+      </section>
+
+      <section className="card card-pad" style={{ marginTop: 28 }}>
+        <span className="kicker">Auctioneer desk</span>
+        <h2 className="section-title" style={{ marginTop: 6 }}>Your room.<br />Your tournament.</h2>
         <div className="quick-grid">
-          <button onClick={onManageSchedule}>
-            <CalendarDays size={20} />
+          <button className="quick-link" onClick={onManageSchedule}>
+            <span className="ico"><CalendarDays size={18} /></span>
             <span>
-              <b>Match Schedules & Toss</b>
+              <b>Match Schedules &amp; Toss</b>
               <small>{matchesCount} matches scheduled</small>
             </span>
-            <ChevronRight size={16} />
+            <ChevronRight size={16} className="chev" />
           </button>
-          <button onClick={onManageTeams}>
-            <Users size={20} />
+          <button className="quick-link" onClick={onManageTeams}>
+            <span className="ico"><Wallet size={18} /></span>
             <span>
-              <b>Franchise Roster & Budgets</b>
+              <b>Franchise Roster &amp; Budgets</b>
               <small>{teamsCount} teams · {maxSquadSize} players each</small>
             </span>
-            <ChevronRight size={16} />
+            <ChevronRight size={16} className="chev" />
           </button>
         </div>
       </section>
     </div>
   )
 }
-

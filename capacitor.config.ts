@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
   appId: 'com.rivalryleague.app',
   appName: 'The Rivalry League',
   webDir: 'www',
-  backgroundColor: '#070c16',
+  backgroundColor: '#faf7f2',
   server: {
     url: serverUrl,
     cleartext: false,
@@ -20,12 +20,12 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 1200,
-      backgroundColor: '#070c16',
+      backgroundColor: '#faf7f2',
       showSpinner: false
     },
     StatusBar: {
-      style: 'DARK',
-      backgroundColor: '#070c16'
+      style: 'LIGHT',
+      backgroundColor: '#faf7f2'
     }
   }
 }

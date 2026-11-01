@@ -9,19 +9,21 @@ import {
   apiPlayers,
   apiAuction,
   apiMatches,
+  apiOwner,
   getAuthToken,
-  setAuthToken
+  getOwnerTeamId,
+  setAuthToken,
+  setOwnerToken
 } from '@/lib/client/api'
 import { sounds } from '@/lib/client/sound'
 
 // Layout & Common Components
 import { Topbar } from '@/components/layout/Topbar'
 import { Toast } from '@/components/common/Toast'
-import { CricketAnimatedBackground } from '@/components/layout/CricketAnimatedBackground'
 
 // Views
 import { HomeView } from '@/components/views/HomeView'
-import { AuctionView } from '@/components/views/AuctionView'
+import { AuctionView, type WheelScope } from '@/components/views/AuctionView'
 import { SpectatorView } from '@/components/views/SpectatorView'
 import { TeamsView } from '@/components/views/TeamsView'
 import { PlayersView } from '@/components/views/PlayersView'
@@ -39,6 +41,7 @@ import { AdjustBudgetModal } from '@/components/modals/AdjustBudgetModal'
 import { AddMatchModal } from '@/components/modals/AddMatchModal'
 import { TossModal } from '@/components/modals/TossModal'
 import { ResultModal } from '@/components/modals/ResultModal'
+import { OwnerLoginModal } from '@/components/modals/OwnerLoginModal'
 import { SetupModal } from '@/components/modals/SetupModal'
 
 export default function Page() {
@@ -58,6 +61,7 @@ export default function Page() {
   const [scheduleFilter, setScheduleFilter] = useState('ALL')
 
   // League Metadata State
+  const [wheelScope, setWheelScope] = useState<WheelScope>('auto')
   const [leagueName, setLeagueName] = useState('The Rivalry League')
   const [season, setSeason] = useState('01')
   const [defaultPurse, setDefaultPurse] = useState(20000)
@@ -67,6 +71,7 @@ export default function Page() {
   const [isAuctioneer, setIsAuctioneer] = useState(false)
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authError, setAuthError] = useState('')
+  const [ownerTeamId, setOwnerTeamId] = useState<string | null>(null)
 
   // Modal Visibility State
   const [setupOpen, setSetupOpen] = useState(false)
@@ -77,12 +82,15 @@ export default function Page() {
   const [addMatchModalOpen, setAddMatchModalOpen] = useState(false)
   const [tossModalMatch, setTossModalMatch] = useState<Match | null>(null)
   const [resultModalMatch, setResultModalMatch] = useState<Match | null>(null)
+  const [ownerLoginTeam, setOwnerLoginTeam] = useState<Team | null>(null)
   const [directSellPlayer, setDirectSellPlayer] = useState<Player | null>(null)
   const [directSellModalOpen, setDirectSellModalOpen] = useState(false)
 
   // Live Hammer Desk State
   const [awardTeam, setAwardTeam] = useState<string>('')
   const [awardPrice, setAwardPrice] = useState<number>(500)
+
+  const ownerTeam = teams.find(t => t.id === ownerTeamId) || null
 
   // Next sequential player number calculation
   const nextPlayerNumber = useMemo(() => {
@@ -157,7 +165,7 @@ export default function Page() {
 
   const anyModalOpen =
     authModalOpen || setupOpen || teamModalOpen || playerModalOpen || bulkModalOpen ||
-    addMatchModalOpen || directSellModalOpen || !!budgetModalTeam || !!tossModalMatch || !!resultModalMatch
+    addMatchModalOpen || directSellModalOpen || !!budgetModalTeam || !!tossModalMatch || !!resultModalMatch || !!ownerLoginTeam
 
   // Live auto-sync so a second screen (projector / spectators) follows the auction
   useEffect(() => {
@@ -180,9 +188,11 @@ export default function Page() {
   // Restore a still-valid session on load; fall back to spectator when it expires
   useEffect(() => {
     if (getAuthToken()) setIsAuctioneer(true)
+    setOwnerTeamId(getOwnerTeamId())
     const onExpired = () => {
-      setIsAuctioneer(false)
-      setToast('Session expired - unlock with PIN again')
+      setIsAuctioneer(!!getAuthToken())
+      setOwnerTeamId(getOwnerTeamId())
+      setToast('Session expired - please sign in again')
     }
     window.addEventListener('trl-auth-expired', onExpired)
     return () => window.removeEventListener('trl-auth-expired', onExpired)
@@ -207,6 +217,75 @@ export default function Page() {
       }
     } catch {
       setAuthError('Error verifying PIN')
+    }
+  }
+
+  const handleOwnerLogin = async (loginId: string, pin: string) => {
+    setAuthError('')
+    try {
+      const res = await apiOwner.login(loginId, pin)
+      if (res.success && res.token) {
+        setOwnerToken(res.token)
+        setOwnerTeamId(res.teamId || null)
+        setAuthModalOpen(false)
+        setPage('auction')
+        notify('Signed in as team owner')
+      } else {
+        setAuthError(res.message || 'Wrong login ID or PIN')
+      }
+    } catch {
+      setAuthError('Could not sign in')
+    }
+  }
+
+  const handleOwnerLogout = () => {
+    setOwnerToken(null)
+    setOwnerTeamId(null)
+    notify('Signed out')
+  }
+
+  const handleOwnerBid = async (increment: number) => {
+    try {
+      const data = await apiOwner.bid(increment)
+      if (data.success) sounds.playHammer()
+      notify(data.message)
+    } catch {
+      notify('Failed to place bid')
+    } finally {
+      loadState()
+    }
+  }
+
+  const handleUploadLogo = async (logo: string) => {
+    if (!ownerTeamId) return
+    try {
+      const data = await apiOwner.uploadLogo(ownerTeamId, logo)
+      notify(data.message)
+    } catch {
+      notify('Failed to upload logo')
+    } finally {
+      loadState()
+    }
+  }
+
+  const handleRemoveLogo = async () => {
+    if (!ownerTeamId) return
+    try {
+      const data = await apiOwner.removeLogo(ownerTeamId)
+      notify(data.message)
+    } catch {
+      notify('Failed to remove logo')
+    } finally {
+      loadState()
+    }
+  }
+
+  const handleSaveOwnerLogin = async (teamId: string, loginId: string, pin: string): Promise<string | null> => {
+    try {
+      const data = await apiOwner.setLogin(teamId, loginId, pin)
+      return data.success ? null : data.message
+    } catch {
+      return 'Could not save the login'
     }
   }
 
@@ -305,9 +384,7 @@ export default function Page() {
   // Auction Room Operations
   const handleSpin = () => {
     guardAuctioneer(async () => {
-      const upcoming = players.filter(p => p.status === 'Upcoming')
-      const unsold = players.filter(p => p.status === 'Unsold')
-      if (isSpinning || (!upcoming.length && !unsold.length)) return
+      if (isSpinning || current) return
       setIsSpinning(true)
       sounds.playSpinnerTick()
       setCurrent(null)
@@ -316,7 +393,7 @@ export default function Page() {
 
       window.setTimeout(async () => {
         try {
-          const data = await apiAuction.spin()
+          const data = await apiAuction.spin(wheelScope)
           if (data.success) {
             setCurrent(data.player)
             const initialBase = data.player.base || 500
@@ -581,6 +658,7 @@ export default function Page() {
   const handleAddPlayer = async (p: {
     name: string
     base: number
+    role?: string
   }) => {
     guardAuctioneer(async () => {
       try {
@@ -604,13 +682,14 @@ export default function Page() {
         const parts = line.split(',').map(s => s.trim())
         return {
           name: parts[0] || 'Player',
-          base: Number(parts[1]) || 500
+          base: Number(parts[1]) || 500,
+          role: parts[2] || undefined
         }
       })
       try {
         const data = await apiPlayers.bulkImport(list)
         if (data.success) {
-          notify(`Imported ${list.length} players with base price ₹500`)
+          notify(`Imported ${list.length} players`)
           setBulkModalOpen(false)
         }
       } catch {
@@ -776,7 +855,7 @@ export default function Page() {
       if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return
       if (e.ctrlKey || e.metaKey || e.altKey) return
       const k = e.key.toLowerCase()
-      if (k === 's') handleSpin()
+      if (k === 's') { if (!current) handleSpin() }
       else if (k === 'u') handleMarkUnsold()
       else if (k === 'enter') handleAwardSell()
       else if (/^[1-9]$/.test(k) && teams[Number(k) - 1]) handleBid(teams[Number(k) - 1])
@@ -789,7 +868,6 @@ export default function Page() {
 
   return (
     <div className="app-shell">
-      <CricketAnimatedBackground />
       <Topbar
         page={page}
         setPage={setPage}
@@ -800,6 +878,8 @@ export default function Page() {
         onUpdateSquadLimit={handleUpdateSquadLimit}
         isAuctioneer={isAuctioneer}
         setIsAuctioneer={handleSetAuctioneer}
+        ownerTeamName={ownerTeam?.name || null}
+        onOwnerLogout={handleOwnerLogout}
         onOpenAuth={() => setAuthModalOpen(true)}
         isMuted={isMuted}
         onToggleSound={handleToggleSound}
@@ -818,6 +898,7 @@ export default function Page() {
             onStart={() => setPage('auction')}
             onManageTeams={() => setPage('teams')}
             onManageSchedule={() => setPage('schedule')}
+            onQuickToss={handleQuickToss}
           />
         )}
 
@@ -829,6 +910,8 @@ export default function Page() {
             bid={bid}
             leader={leader}
             maxSquadSize={maxSquadSize}
+            ownerTeam={ownerTeam}
+            onOwnerBid={handleOwnerBid}
             onUnlock={() => setAuthModalOpen(true)}
           />
         )}
@@ -841,23 +924,21 @@ export default function Page() {
             bid={bid}
             leader={leader}
             spinning={isSpinning}
+            wheelScope={wheelScope}
+            setWheelScope={setWheelScope}
             awardTeam={awardTeam}
             setAwardTeam={setAwardTeam}
             awardPrice={awardPrice}
             setAwardPrice={setAwardPrice}
             maxSquadSize={maxSquadSize}
-            isAuctioneer={isAuctioneer}
             spin={handleSpin}
             nominate={handleNominate}
             makeBid={handleBid}
             awardSell={handleAwardSell}
             unsold={handleMarkUnsold}
-            onBack={() => setPage('home')}
             onAddPlayer={() => guardAuctioneer(() => setPlayerModalOpen(true))}
             onAddTeam={() => guardAuctioneer(() => setTeamModalOpen(true))}
             onAdjustBudget={t => guardAuctioneer(() => setBudgetModalTeam(t))}
-            onUpdateSquadLimit={handleUpdateSquadLimit}
-            onUnlock={() => setAuthModalOpen(true)}
             onDirectSell={handleOpenDirectSell}
             onReopenAllUnsold={handleReopenAllUnsold}
           />
@@ -869,10 +950,14 @@ export default function Page() {
             players={players}
             maxSquadSize={maxSquadSize}
             isAuctioneer={isAuctioneer}
+            ownerTeamId={ownerTeamId}
             onAddTeam={() => guardAuctioneer(() => setTeamModalOpen(true))}
             onDeleteTeam={handleDeleteTeam}
             onAdjustBudget={t => guardAuctioneer(() => setBudgetModalTeam(t))}
-            onUpdateSquadLimit={handleUpdateSquadLimit}
+            onOwnerLogin={t => guardAuctioneer(() => setOwnerLoginTeam(t))}
+            onUploadLogo={handleUploadLogo}
+            onRemoveLogo={handleRemoveLogo}
+            notify={notify}
           />
         )}
 
@@ -884,6 +969,9 @@ export default function Page() {
             roleFilter={roleFilter}
             setRoleFilter={setRoleFilter}
             isAuctioneer={isAuctioneer}
+            maxSquadSize={maxSquadSize}
+            defaultPurse={defaultPurse}
+            onOpenAuction={() => setPage('auction')}
             onAddPlayer={() => guardAuctioneer(() => setPlayerModalOpen(true))}
             onBulkImport={() => guardAuctioneer(() => setBulkModalOpen(true))}
             onDeletePlayer={handleDeletePlayer}
@@ -894,6 +982,20 @@ export default function Page() {
               setPage('auction')
             }}
           />
+        )}
+
+        {['schedule', 'standings', 'results'].includes(page) && (
+          <div className="segmented">
+            {[
+              { id: 'schedule', label: 'Fixtures' },
+              { id: 'standings', label: 'Leaderboard' },
+              { id: 'results', label: 'Auction Results' }
+            ].map(tab => (
+              <button key={tab.id} className={page === tab.id ? 'active' : ''} onClick={() => setPage(tab.id)}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
         )}
 
         {page === 'schedule' && (
@@ -930,6 +1032,7 @@ export default function Page() {
         <AuthModal
           onClose={() => setAuthModalOpen(false)}
           onVerify={handleVerifyPin}
+          onOwnerLogin={handleOwnerLogin}
           error={authError}
         />
       )}
@@ -1001,6 +1104,14 @@ export default function Page() {
           match={resultModalMatch}
           onClose={() => setResultModalMatch(null)}
           onSave={handleRecordResult}
+        />
+      )}
+
+      {ownerLoginTeam && (
+        <OwnerLoginModal
+          team={ownerLoginTeam}
+          onClose={() => setOwnerLoginTeam(null)}
+          onSave={handleSaveOwnerLogin}
         />
       )}
 

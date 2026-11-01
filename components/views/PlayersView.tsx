@@ -1,17 +1,15 @@
 'use client'
 
-import {
-  Plus,
-  FileText,
-  Gavel,
-  Search,
-  Swords,
-  Trash2,
-  Zap,
-  Settings2,
-  RotateCcw
-} from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Plus, FileText, Gavel, Search, Swords, Trash2, Zap, RotateCcw, Shield } from 'lucide-react'
 import type { Player } from '@/lib/server/db'
+import { PLAYER_ROLES } from '@/lib/shared/roles'
+
+const STATUS_BY_FILTER: Record<string, Player['status'] | undefined> = {
+  UPCOMING: 'Upcoming',
+  SOLD: 'Sold',
+  UNSOLD: 'Unsold'
+}
 
 export function PlayersView({
   players,
@@ -20,12 +18,15 @@ export function PlayersView({
   roleFilter,
   setRoleFilter,
   isAuctioneer,
+  maxSquadSize,
+  defaultPurse,
   onAddPlayer,
   onBulkImport,
   onDeletePlayer,
   onReopenPlayer,
   onNominate,
-  onDirectSell
+  onDirectSell,
+  onOpenAuction
 }: {
   players: Player[]
   search: string
@@ -33,214 +34,192 @@ export function PlayersView({
   roleFilter: string
   setRoleFilter: (r: string) => void
   isAuctioneer: boolean
+  maxSquadSize: number
+  defaultPurse: number
   onAddPlayer: () => void
   onBulkImport: () => void
   onDeletePlayer: (id: number) => void
   onReopenPlayer: (id: number) => void
   onNominate: (id: number) => void
   onDirectSell: (player?: Player) => void
+  onOpenAuction: () => void
 }) {
-  const filtered = players.filter(p => {
-    const query = search.toLowerCase().replace('#', '').trim()
-    const matchesSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      String(p.number || '').includes(query)
+  const [cricketRole, setCricketRole] = useState('ALL')
 
-    const matchesFilter =
-      roleFilter === 'ALL'
-        ? true
-        : roleFilter === 'UPCOMING'
-        ? p.status === 'Upcoming'
-        : roleFilter === 'SOLD'
-        ? p.status === 'Sold'
-        : roleFilter === 'UNSOLD'
-        ? p.status === 'Unsold'
-        : true
+  const count = (status: Player['status']) => players.filter(p => p.status === status).length
+  const filters = [
+    { id: 'ALL', label: 'All', count: players.length },
+    { id: 'UPCOMING', label: 'Available', count: count('Upcoming') },
+    { id: 'SOLD', label: 'Sold', count: count('Sold') },
+    { id: 'UNSOLD', label: 'Unsold', count: count('Unsold') }
+  ]
 
-    return matchesSearch && matchesFilter
-  })
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().replace('#', '').trim()
+    const status = STATUS_BY_FILTER[roleFilter]
+    return players.filter(p => {
+      if (status && p.status !== status) return false
+      if (cricketRole !== 'ALL' && p.role !== cricketRole) return false
+      return !q || p.name.toLowerCase().includes(q) || String(p.number || '').includes(q)
+    })
+  }, [players, search, roleFilter, cricketRole])
+
+  const hasRoles = players.some(p => p.role)
 
   return (
-    <div className="content-page">
+    <div>
       <div className="page-heading">
         <div>
-          <span className="section-kicker">AUCTIONEER PLAYER POOL · BASE ₹500</span>
-          <h2>Player <em>Directory.</em></h2>
+          <h2>Player pool <span className="pill" style={{ verticalAlign: 'middle' }}>{players.length} in pool</span></h2>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            className="ghost-btn"
-            style={{ color: 'var(--gold)', borderColor: 'rgba(255, 200, 61, 0.4)' }}
-            onClick={() => onDirectSell()}
-          >
-            <Gavel size={16} /> Direct Sell / Assign
-          </button>
-          <button className="ghost-btn" onClick={onBulkImport}>
-            <FileText size={16} /> Bulk Import
-          </button>
-          <button className="primary-btn" onClick={onAddPlayer}>
-            <Plus size={16} /> Add Player (₹500 Base)
-          </button>
-        </div>
+        {isAuctioneer && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="ghost-btn btn-sm" onClick={onBulkImport}><FileText size={14} /> Bulk Import</button>
+            <button className="primary-btn btn-sm" onClick={onAddPlayer}><Plus size={14} /> Add Player</button>
+          </div>
+        )}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <div className="filter-row" style={{ margin: 0 }}>
+      <div className="search-box">
+        <Search size={17} />
+        <input
+          type="search"
+          placeholder="Search player name or #number"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+      </div>
+
+      <div className="filter-row">
+        {filters.map(f => (
           <button
-            className={roleFilter === 'ALL' ? 'filter-active' : ''}
-            onClick={() => setRoleFilter('ALL')}
+            key={f.id}
+            className={roleFilter === f.id ? 'filter-active' : ''}
+            onClick={() => setRoleFilter(f.id)}
           >
-            ALL PLAYERS <span>{players.length}</span>
+            {f.label} ({f.count})
           </button>
-          <button
-            className={roleFilter === 'UPCOMING' ? 'filter-active' : ''}
-            onClick={() => setRoleFilter('UPCOMING')}
-          >
-            UPCOMING <span>{players.filter(p => p.status === 'Upcoming').length}</span>
+        ))}
+      </div>
+
+      {hasRoles && (
+        <div className="filter-row roles">
+          <button className={cricketRole === 'ALL' ? 'filter-active' : ''} onClick={() => setCricketRole('ALL')}>
+            All Roles
           </button>
-          <button
-            className={roleFilter === 'SOLD' ? 'filter-active' : ''}
-            onClick={() => setRoleFilter('SOLD')}
-          >
-            SOLD <span>{players.filter(p => p.status === 'Sold').length}</span>
-          </button>
-          <button
-            className={roleFilter === 'UNSOLD' ? 'filter-active' : ''}
-            onClick={() => setRoleFilter('UNSOLD')}
-          >
-            UNSOLD <span>{players.filter(p => p.status === 'Unsold').length}</span>
-          </button>
+          {PLAYER_ROLES.map(role => (
+            <button
+              key={role}
+              className={cricketRole === role ? 'filter-active' : ''}
+              onClick={() => setCricketRole(role)}
+            >
+              {role}
+            </button>
+          ))}
         </div>
-        <div className="search-box">
-          <Search size={16} />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search players or #number..."
-          />
+      )}
+
+      <div className="rule-banner">
+        <div className="l">
+          <span className="ico"><Gavel size={18} /></span>
+          <div>
+            <small>Auction draft rule</small>
+            <b>Base Price ₹500 · {maxSquadSize} Players Squad</b>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <small>Purse cap</small>
+          <b className="big">₹{defaultPurse >= 1000 ? `${defaultPurse / 1000}K` : defaultPurse}</b>
         </div>
       </div>
 
       {players.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '80px 20px', background: 'var(--panel)', border: '1px dashed var(--line)', borderRadius: '16px' }}>
-          <Swords size={44} style={{ color: 'var(--gold)', marginBottom: '16px' }} />
-          <h3 style={{ fontFamily: 'Bebas Neue', fontSize: '32px', margin: '0 0 8px' }}>No Players Registered</h3>
-          <p style={{ color: 'var(--muted)', fontSize: '13px', maxWidth: '380px', margin: '0 auto 24px', lineHeight: 1.5 }}>
-            Auctioneer: Add individual players (standard ₹500 base price), or paste an entire roster CSV.
-          </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-            <button className="primary-btn" onClick={onAddPlayer}>
-              <Plus size={16} /> Add Single Player (₹500)
-            </button>
-            <button className="ghost-btn" onClick={onBulkImport}>
-              <FileText size={16} /> Bulk Import Roster
-            </button>
-          </div>
+        <div className="empty-state">
+          <Swords size={38} />
+          <h3>No players registered</h3>
+          <p>Players can be added at any time, even during the live auction.</p>
+          {isAuctioneer && (
+            <button className="primary-btn" onClick={onAddPlayer}><Plus size={16} /> Add Player</button>
+          )}
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-state"><p style={{ margin: '0 auto' }}>No players match these filters.</p></div>
       ) : (
         <div className="players-grid">
           {filtered.map(p => (
             <article className="player-card" key={p.id}>
               <div className="player-card-top">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="player-number-pill">#{p.number}</span>
-                  <span className="player-avatar">{p.initials}</span>
+                <span className="avatar sm">
+                  {p.initials}
+                  <span className="tag">#{p.number}</span>
+                </span>
+                <div className="info">
+                  <h3>{p.name}</h3>
+                  <div className="sub">{[p.role, p.style].filter(Boolean).join(' · ') || `Player #${p.number}`}</div>
                 </div>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <span className={`status ${p.status.toLowerCase()}`}>{p.status}</span>
-                  <button
-                    className="icon-btn"
-                    onClick={() => onDeletePlayer(p.id)}
-                    title="Remove player"
-                    style={{ width: '26px', height: '26px' }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+                <span className={p.status === 'Sold' ? 'pill dark' : p.status === 'Unsold' ? 'pill red' : 'pill'}>
+                  {p.status === 'Upcoming' ? 'In pool' : p.status}
+                </span>
               </div>
-
-              <h3>{p.name}</h3>
 
               <div className="player-card-bottom">
-                <span>
-                  <small>BASE PRICE</small>
-                  <b style={{ color: 'var(--gold)' }}>₹{(p.base || 500).toLocaleString()}</b>
-                </span>
-                {p.soldPrice ? (
-                  <span>
-                    <small>SOLD TO</small>
-                    <b className="green">{p.soldTo} (₹{p.soldPrice.toLocaleString()})</b>
-                  </span>
+                {p.status === 'Sold' ? (
+                  <>
+                    <div>
+                      <small>Acquired by</small>
+                      <b style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Shield size={14} /> {p.soldTo}</b>
+                    </div>
+                    <div>
+                      <small style={{ textAlign: 'right' }}>Sold price</small>
+                      <div className="amt">₹{(p.soldPrice || 0).toLocaleString()}</div>
+                    </div>
+                  </>
                 ) : (
-                  <span>
-                    <small>STATUS</small>
-                    <b style={{ color: p.status === 'Upcoming' ? 'var(--gold)' : 'var(--red)' }}>{p.status}</b>
-                  </span>
+                  <>
+                    <div>
+                      <small>Draft status</small>
+                      <b>{p.status === 'Unsold' ? 'Unsold' : 'Upcoming'}</b>
+                    </div>
+                    <div>
+                      <small style={{ textAlign: 'right' }}>Reserve base</small>
+                      <div className="amt">₹{(p.base || 500).toLocaleString()}</div>
+                    </div>
+                  </>
                 )}
               </div>
 
-              <div style={{ marginTop: '14px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {p.status === 'Upcoming' && (
-                  <>
-                    <button
-                      className="primary-btn"
-                      style={{ flex: 1, padding: '8px', fontSize: '10px' }}
-                      onClick={() => onNominate(p.id)}
-                    >
-                      <Gavel size={13} /> Nominate
+              {isAuctioneer && (
+                <div className="acts">
+                  <button className="mini-btn fill" onClick={() => onNominate(p.id)}>
+                    <Gavel size={12} /> {p.status === 'Upcoming' ? 'Nominate' : 'Re-auction'}
+                  </button>
+                  <button className="mini-btn" onClick={() => onDirectSell(p)}>
+                    <Zap size={12} /> {p.status === 'Sold' ? 'Reassign' : 'Sell'}
+                  </button>
+                  {p.status !== 'Upcoming' && (
+                    <button className="mini-btn" onClick={() => onReopenPlayer(p.id)} title="Return to the available pool">
+                      <RotateCcw size={12} /> Reopen
                     </button>
-                    <button
-                      className="ghost-btn"
-                      style={{ flex: 1, padding: '8px', fontSize: '10px', color: '#4ade80', borderColor: 'rgba(74, 222, 128, 0.4)' }}
-                      onClick={() => onDirectSell(p)}
-                    >
-                      <Zap size={13} /> Sell to Team
-                    </button>
-                  </>
-                )}
-                {p.status === 'Sold' && (
-                  <>
-                    <button
-                      className="ghost-btn"
-                      style={{ flex: 1, padding: '8px', fontSize: '10px', color: 'var(--gold)', borderColor: 'rgba(255, 200, 61, 0.4)' }}
-                      onClick={() => onDirectSell(p)}
-                    >
-                      <Settings2 size={13} /> Change Team/Price
-                    </button>
-                    <button
-                      className="ghost-btn"
-                      style={{ padding: '8px 10px', fontSize: '10px' }}
-                      onClick={() => onReopenPlayer(p.id)}
-                      title="Reopen to upcoming"
-                    >
-                      <RotateCcw size={13} />
-                    </button>
-                  </>
-                )}
-                {p.status === 'Unsold' && (
-                  <>
-                    <button
-                      className="ghost-btn"
-                      style={{ flex: 1, padding: '8px', fontSize: '10px', color: '#4ade80', borderColor: 'rgba(74, 222, 128, 0.4)' }}
-                      onClick={() => onDirectSell(p)}
-                    >
-                      <Zap size={13} /> Sell to Team
-                    </button>
-                    <button
-                      className="ghost-btn"
-                      style={{ flex: 1, padding: '8px', fontSize: '10px', color: 'var(--gold)', borderColor: 'var(--gold)' }}
-                      onClick={() => onReopenPlayer(p.id)}
-                    >
-                      <RotateCcw size={13} /> Re-auction
-                    </button>
-                  </>
-                )}
-              </div>
+                  )}
+                  <button
+                    className="mini-btn warn"
+                    style={{ flex: '0 0 36px' }}
+                    onClick={() => onDeletePlayer(p.id)}
+                    aria-label={`Remove ${p.name}`}
+                    title="Remove player"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              )}
             </article>
           ))}
         </div>
       )}
+
+      <button className="fab" onClick={onOpenAuction}>
+        <Gavel size={16} /> Live Desk <span className="dot" />
+      </button>
     </div>
   )
 }
-
