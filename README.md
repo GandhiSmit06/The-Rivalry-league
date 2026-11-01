@@ -2,7 +2,7 @@
 
 A live cricket auction and league app. The superadmin spins a wheel to draw each player, team owners bid from their own phones, and every screen follows along in real time. After the auction it runs the league too: fixtures, tosses, results and a points table with net run rate.
 
-It runs as a website on Vercel and as an Android app that loads the same site, so most updates reach phones without a reinstall.
+This repository holds the website. The Android app wraps the same site and lives in [Tirth11712/rivalryleague](https://github.com/Tirth11712/rivalryleague).
 
 **Live site:** https://rivalryleague.vercel.app
 
@@ -61,8 +61,7 @@ Net run rate is runs scored per over minus runs conceded per over. A side bowled
 - [Next.js 16](https://nextjs.org) (App Router) with React 19 and TypeScript
 - [Neon](https://neon.tech) serverless Postgres
 - Hand-written CSS in `app/globals.css`, with the Space Grotesk font and lucide-react icons
-- [Capacitor](https://capacitorjs.com) for the Android app
-- Vercel for hosting and GitHub Actions for APK builds
+- Vercel for hosting
 
 ## Run it locally
 
@@ -101,17 +100,6 @@ Put these in `.env.local`, which git ignores. Never commit them.
 2. Add `DATABASE_URL` and `AUTH_SECRET` as environment variables.
 3. Deploy. Each push to `main` then deploys automatically.
 
-## Android app
-
-The app is a thin Capacitor shell around the hosted site. Website changes reach the app without a reinstall. A new APK is only needed if the app's name, icon or web address changes.
-
-1. In the GitHub repository, go to **Settings → Secrets and variables → Actions → Variables**.
-2. Add `CAP_SERVER_URL` with your hosted site's address.
-3. Each push to `main` builds an APK. You can also run **Build Android APK** from the Actions tab.
-4. Download `rivalry-league-apk` from the finished run.
-
-This is a debug build meant for sharing directly, not for the Play Store. The app needs an internet connection.
-
 ## Project layout
 
 ```
@@ -125,10 +113,7 @@ lib/
   client/            API client, sounds and logo resizing
   server/            Database, auction, match, player, team and login logic
   shared/            Rules used on both sides: max bid and standings
-android/             Capacitor Android project
-resources/           App icon and splash images
 scripts/             Database migration
-www/                 Offline screen for the Android app
 ```
 
 All league data is stored as one JSON document in the `auction_store` table. A revision number stops two simultaneous saves from overwriting each other.
