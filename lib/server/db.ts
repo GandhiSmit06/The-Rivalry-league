@@ -66,7 +66,8 @@ export type AuctionState = {
 
 export type DatabaseSchema = {
   auctioneer: {
-    pin: string
+    pin?: string // only in older data; replaced by pinHash on the next sign-in
+    pinHash?: string
     name: string
   }
   league: {
@@ -122,7 +123,7 @@ const initialData: DatabaseSchema = {
 let sqlClient: ReturnType<typeof neon> | null = null
 let isNeonInitialized = false
 
-function getSqlClient() {
+export function getSqlClient() {
   const dbUrl = process.env.DATABASE_URL
   if (!dbUrl) return null
   if (!sqlClient) {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Shuffle, Gavel, Plus, Search, X, Zap, RotateCcw } from 'lucide-react'
 import type { Player, Team } from '@/lib/server/db'
 import { TeamBadge } from '@/components/common/TeamBadge'
+import { maxBidFor } from '@/lib/shared/rules'
 
 export type WheelScope = 'auto' | 'unsold' | 'all'
 type PoolFilter = 'ALL' | 'Upcoming' | 'Sold' | 'Unsold'
@@ -350,7 +351,7 @@ export function AuctionView({
                           <span className="team-dot" style={{ background: t.color }} />
                           <span>{t.name}</span>
                         </span>
-                        <small>{full ? 'FULL' : `₹${(t.purse / 1000).toFixed(1)}k`}</small>
+                        <small>{full ? 'FULL' : `Max ₹${(maxBidFor(t, maxSquadSize) / 1000).toFixed(1)}k`}</small>
                       </button>
                     )
                   })}
@@ -366,7 +367,7 @@ export function AuctionView({
                     key={inc.value}
                     className={`inc-btn ${inc.tone}`}
                     onClick={() => selectedTeam && makeBid(selectedTeam, inc.value)}
-                    disabled={!current || !selectedTeam || selectedFull || selectedTeam.purse < bid + inc.value}
+                    disabled={!current || !selectedTeam || selectedFull || maxBidFor(selectedTeam, maxSquadSize) < bid + inc.value}
                   >
                     <b>+₹{inc.value.toLocaleString()}</b>
                     <small>{inc.label}</small>

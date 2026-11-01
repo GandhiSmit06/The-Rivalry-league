@@ -6,8 +6,7 @@ import type { Team, Player } from '@/lib/server/db'
 import { TeamBadge } from '@/components/common/TeamBadge'
 import { fileToLogo } from '@/lib/client/image'
 import { roleShort } from '@/lib/shared/roles'
-
-const BASE_PRICE = 500
+import { maxBidFor } from '@/lib/shared/rules'
 
 function formatPurse(amount: number): string {
   return amount >= 1000 ? `₹${Math.round(amount / 1000)}K` : `₹${amount}`
@@ -112,7 +111,7 @@ export function TeamsView({
               const total = t.purse + t.spent
               const spentPct = total ? Math.round((t.spent / total) * 100) : 0
               const openSlots = Math.max(0, maxSquadSize - t.players)
-              const maxBid = openSlots ? Math.max(0, t.purse - (openSlots - 1) * BASE_PRICE) : 0
+              const maxBid = maxBidFor(t, maxSquadSize)
               const marquee = [...roster].sort((a, b) => (b.soldPrice || 0) - (a.soldPrice || 0))[0]
               const isMine = ownerTeamId === t.id
               const rosterOpen = openRosters.includes(t.id)

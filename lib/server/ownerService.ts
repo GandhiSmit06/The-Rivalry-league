@@ -1,23 +1,10 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { readDb, writeDb, DatabaseSchema, Team } from './db'
+import { hashPassword, passwordMatches } from './password'
 
 // Resized in the browser to 256x256, so a real logo is far below this.
 const MAX_LOGO_CHARS = 150_000
 const LOGO_PATTERN = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/
 const MIN_PASSWORD_LENGTH = 6
-
-function hashPin(pin: string): string {
-  const salt = randomBytes(16).toString('hex')
-  return `${salt}:${scryptSync(pin, salt, 32).toString('hex')}`
-}
-
-function pinMatches(pin: string, stored: string): boolean {
-  const [salt, hash] = stored.split(':')
-  if (!salt || !hash) return false
-  const expected = Buffer.from(hash, 'hex')
-  const actual = scryptSync(pin, salt, 32)
-  return expected.length === actual.length && timingSafeEqual(expected, actual)
-}
 
 /** Teams are referenced by name, so a rename has to reach every place that stores it. */
 function renameTeam(db: DatabaseSchema, team: Team, name: string) {
@@ -74,7 +61,7 @@ export async function setOwnerLogin(
     renameTeam(db, team, teamName)
   }
 
-  const pinHash = password ? hashPin(password) : (existingHash as string)
+  const pinHash = password ? hashPassword(password) : (existingHash as string)
   db.ownerLogins = { ...db.ownerLogins, [team.id]: { loginId: id, pinHash } }
   if (details.ownerName?.trim()) team.owner = details.ownerName.trim()
   await writeDb(db)
@@ -92,7 +79,7 @@ export async function verifyOwnerLogin(loginId: string, pin: string): Promise<Te
   const entry = Object.entries(db.ownerLogins || {}).find(([, login]) => login.loginId === id)
   if (!entry) return null
   const [teamId, login] = entry
-  if (!pinMatches((pin || '').trim(), login.pinHash)) return null
+  if (!passwordMatches((pin || '').trim(), login.pinHash)) return null
   return db.teams.find(t => t.id === teamId) || null
 }
 

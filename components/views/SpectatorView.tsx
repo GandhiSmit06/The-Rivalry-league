@@ -3,6 +3,7 @@
 import { Lock, Gavel } from 'lucide-react'
 import type { Player, Team } from '@/lib/server/db'
 import { TeamBadge } from '@/components/common/TeamBadge'
+import { maxBidFor } from '@/lib/shared/rules'
 
 const OWNER_INCREMENTS = [100, 250, 500, 1000]
 
@@ -33,6 +34,7 @@ export function SpectatorView({
   const sold = players.filter(p => p.status === 'Sold').length
   const squadFull = !!ownerTeam && ownerTeam.players >= maxSquadSize
   const isLeading = !!ownerTeam && leader?.id === ownerTeam.id
+  const maxBid = ownerTeam ? maxBidFor(ownerTeam, maxSquadSize) : 0
 
   return (
     <div>
@@ -92,7 +94,7 @@ export function SpectatorView({
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <TeamBadge team={ownerTeam} size={28} /> Bid for {ownerTeam.name}
             </span>
-            <b>₹{ownerTeam.purse.toLocaleString()} left · {ownerTeam.players}/{maxSquadSize}</b>
+            <b>Max bid ₹{maxBid.toLocaleString()} · {ownerTeam.players}/{maxSquadSize}</b>
           </div>
           <div className="inc-grid">
             {OWNER_INCREMENTS.map((inc, i) => (
@@ -100,7 +102,7 @@ export function SpectatorView({
                 key={inc}
                 className={`inc-btn ${i === 3 ? 'hot' : i ? 'mid' : ''}`}
                 onClick={() => onOwnerBid(inc)}
-                disabled={!current || squadFull || isLeading || ownerTeam.purse < bid + inc}
+                disabled={!current || squadFull || isLeading || maxBid < bid + inc}
               >
                 <b>+₹{inc.toLocaleString()}</b>
                 <small>Bid ₹{(bid + inc).toLocaleString()}</small>

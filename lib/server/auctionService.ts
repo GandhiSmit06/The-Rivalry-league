@@ -1,4 +1,5 @@
 import { readDb, writeDb, AuctionState, DatabaseSchema, DbConflictError, Player, Team } from './db'
+import { maxBidFor } from '@/lib/shared/rules'
 
 /** Gives a sold player's price and squad slot back to the team that bought them. */
 function refundSale(db: DatabaseSchema, player: Player) {
@@ -203,6 +204,11 @@ async function tryBid(teamName: string, amount: number, increment?: number): Pro
     }
   }
 
+  const maxBid = maxBidFor(team, maxSquad)
+  if (bidAmount > maxBid) {
+    return { success: false, message: `${team.name} can bid up to ₹${maxBid.toLocaleString()} and still fill its squad` }
+  }
+
   db.auctionState.currentBid = bidAmount
   db.auctionState.leaderTeamId = team.id
   db.auctionState.leaderTeamName = team.name
@@ -281,6 +287,11 @@ export async function sellPlayer(
       success: false,
       message: `${team.name} only has ₹${team.purse.toLocaleString()} purse available`
     }
+  }
+
+  const maxBid = maxBidFor(team, maxSquad)
+  if (finalPrice > maxBid) {
+    return { success: false, message: `${team.name} can pay up to ₹${maxBid.toLocaleString()} and still fill its squad` }
   }
 
   targetPlayer.status = 'Sold'
