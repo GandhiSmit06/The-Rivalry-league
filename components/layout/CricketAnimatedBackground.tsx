@@ -59,12 +59,6 @@ export function CricketAnimatedBackground() {
             <stop offset="50%" stopColor="#38bdf8" stopOpacity="0.45" />
             <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.8" />
           </linearGradient>
-
-          {/* Subtle Glow Filter */}
-          <filter id="cricketGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="8" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
         </defs>
 
         {/* 1. STADIUM DOME AMBIENT LIGHT */}
@@ -152,7 +146,7 @@ export function CricketAnimatedBackground() {
         {/* 6. TOP-RIGHT CELESTIAL CRICKET BALL WITH ROTATING SEAM STITCHES */}
         <g className="cricket-ball-watermark" transform="translate(1220, 140)">
           {/* Ball Sphere Glow */}
-          <circle cx="0" cy="0" r="95" fill="url(#cricketLeatherBall)" filter="url(#cricketGlow)" />
+          <circle cx="0" cy="0" r="95" fill="url(#cricketLeatherBall)" />
           <circle cx="0" cy="0" r="90" fill="none" stroke="rgba(248, 113, 113, 0.25)" strokeWidth="1.5" />
 
           {/* Rotating Seam Group */}

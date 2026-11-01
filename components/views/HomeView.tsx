@@ -11,6 +11,7 @@ import {
   ChevronRight
 } from 'lucide-react'
 import { FeatureCard } from '@/components/common/FeatureCard'
+import { RivalryLeagueLogo } from '@/components/common/RivalryLeagueLogo'
 
 export function HomeView({
   season,
@@ -38,6 +39,9 @@ export function HomeView({
       <section className="hero">
         <div className="hero-orbit orbit-one" />
         <div className="hero-orbit orbit-two" />
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
+          <RivalryLeagueLogo size={84} animated={true} />
+        </div>
         <div className="eyebrow">
           <span className="live-dot" /> THE RIVALRY LEAGUE · AUCTIONEER COMMAND
           <span className="season-pill">SEASON · {season}</span>

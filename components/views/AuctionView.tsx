@@ -67,6 +67,7 @@ export function AuctionView({
 }) {
   const [poolSearch, setPoolSearch] = useState('')
   const [wheelAngle, setWheelAngle] = useState(0)
+  const [mobileTab, setMobileTab] = useState<'stage' | 'bids' | 'pool'>('stage')
 
   const upcoming = useMemo(() => {
     return players.filter(p => p.status === 'Upcoming')
@@ -80,6 +81,13 @@ export function AuctionView({
   const isUnsoldRound = upcoming.length === 0 && unsoldPlayers.length > 0
   const activeWheelPlayers = isUnsoldRound ? unsoldPlayers : upcoming
   const N = activeWheelPlayers.length
+
+  // On mobile, if a player is drawn, focus on the Stage
+  useEffect(() => {
+    if (current) {
+      setMobileTab('stage')
+    }
+  }, [current])
 
   const filteredPool = useMemo(() => {
     const source = isUnsoldRound ? unsoldPlayers : upcoming
@@ -210,9 +218,37 @@ export function AuctionView({
         </div>
       </div>
 
+      {/* Mobile-Only Arena Switcher Pills */}
+      <div className="mobile-auction-switcher">
+        <button
+          type="button"
+          className={mobileTab === 'stage' ? 'm-tab-btn active' : 'm-tab-btn'}
+          onClick={() => setMobileTab('stage')}
+        >
+          <Gavel size={13} />
+          <span>Stage {current ? `(#${current.number})` : ''}</span>
+        </button>
+        <button
+          type="button"
+          className={mobileTab === 'bids' ? 'm-tab-btn active' : 'm-tab-btn'}
+          onClick={() => setMobileTab('bids')}
+        >
+          <Users size={13} />
+          <span>Bids & Teams</span>
+        </button>
+        <button
+          type="button"
+          className={mobileTab === 'pool' ? 'm-tab-btn active' : 'm-tab-btn'}
+          onClick={() => setMobileTab('pool')}
+        >
+          <Search size={13} />
+          <span>{isUnsoldRound ? `Unsold (${unsoldPlayers.length})` : `Pool (${upcoming.length})`}</span>
+        </button>
+      </div>
+
       <div className="auction-layout">
         {/* Left Pool Queue with dedicated, spacious player cards */}
-        <aside className="pool-card">
+        <aside className={`pool-card ${mobileTab === 'pool' ? 'mobile-visible' : 'mobile-hidden'}`}>
           <div className="card-label">
             <span>{isUnsoldRound ? 'RE-AUCTION POOL' : 'PLAYER POOL'}</span>
             <b style={isUnsoldRound ? { color: '#f87171' } : undefined}>
@@ -354,7 +390,7 @@ export function AuctionView({
         </aside>
 
         {/* Center Stage & Smooth Animated SVG Tournament Wheel */}
-        <section className="stage">
+        <section className={`stage ${mobileTab === 'stage' ? 'mobile-visible' : 'mobile-hidden'}`}>
           <div className="stage-top">
             <span>AUCTION BLOCK</span>
             {isUnsoldRound ? (
@@ -602,7 +638,7 @@ export function AuctionView({
         </section>
 
         {/* Right Bidding Stage & Live Auctioneer Desk */}
-        <section className="bid-card">
+        <section className={`bid-card ${mobileTab === 'bids' ? 'mobile-visible' : 'mobile-hidden'}`}>
           <div className="card-label">
             <span>LIVE BIDDING CONTROL</span>
             <b>{teams.length} FRANCHISES</b>
