@@ -189,7 +189,21 @@ export async function readDb(): Promise<DatabaseSchema> {
         SELECT data FROM auction_store WHERE id = 'default' LIMIT 1;
       `
       if (rows && rows.length > 0 && rows[0].data) {
-        return rows[0].data as DatabaseSchema
+        const data = rows[0].data as DatabaseSchema
+        if (!data.league?.name || data.league.name === 'Sunday Premier Auction') {
+          if (!data.league) {
+            data.league = {
+              name: 'The Rivalry League',
+              season: '01',
+              defaultPurse: 20000,
+              maxSquadSize: 5
+            }
+          } else {
+            data.league.name = 'The Rivalry League'
+          }
+          writeDb(data).catch(() => {})
+        }
+        return data
       }
     } catch (err) {
       console.error('[Neon Postgres Read Warning, falling back to local file]:', err)

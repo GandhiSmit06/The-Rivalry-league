@@ -55,13 +55,18 @@ export function Topbar({
   onToggleSound: () => void
   onOpenSettings: () => void
 }) {
+  const displayName =
+    leagueName && leagueName !== 'Sunday Premier Auction'
+      ? leagueName
+      : 'The Rivalry League'
+
   return (
     <>
       <header className="topbar">
         <button className="brand" onClick={() => setPage('home')}>
           <RivalryLeagueLogo size={38} animated={true} />
           <div className="brand-text-col">
-            <b style={{ letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{leagueName || 'The Rivalry League'}</b>
+            <b style={{ letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{displayName}</b>
             <small>SEASON · {season}</small>
           </div>
         </button>

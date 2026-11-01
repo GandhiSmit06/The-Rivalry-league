@@ -1605,45 +1605,333 @@ button {
   color: var(--gold);
 }
 
-/* Results Recap */
-.result-hero {
-  padding: 28px;
+/* Results Recap & Marquee Showcase */
+.marquee-card {
+  padding: 24px 28px;
   display: flex;
   align-items: center;
   gap: 20px;
-  border-color: #66521c;
-  background: linear-gradient(105deg, #1f1c14, #0f1624);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 200, 61, 0.35);
+  background: linear-gradient(135deg, rgba(255, 200, 61, 0.08) 0%, rgba(13, 20, 36, 0.95) 100%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 0 25px rgba(255, 200, 61, 0.05);
   flex-wrap: wrap;
+  margin-bottom: 24px;
 }
-.result-icon {
+.marquee-trophy-wrap {
   width: 58px;
   height: 58px;
-  border-radius: 50%;
-  background: rgba(255, 200, 61, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 200, 61, 0.15);
+  border: 1px solid rgba(255, 200, 61, 0.4);
   color: var(--gold);
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  box-shadow: 0 0 18px rgba(255, 200, 61, 0.2);
 }
-.result-hero h3 {
+.marquee-info {
+  flex: 1;
+  min-width: 220px;
+}
+.marquee-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+.marquee-info h3 {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: 34px;
+  font-size: 32px;
   font-weight: 400;
-  margin: 4px 0;
+  margin: 2px 0 6px;
+  letter-spacing: 0.5px;
+  color: #ffffff;
 }
-.result-hero p {
+.marquee-info p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.4;
 }
-.result-hero > strong {
+.marquee-price-tag {
   margin-left: auto;
+  text-align: right;
+  flex-shrink: 0;
+}
+.marquee-price-tag small {
+  display: block;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+}
+.marquee-price-tag b {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: 52px;
+  font-size: 44px;
   font-weight: 400;
   color: var(--gold);
   letter-spacing: 1px;
+  line-height: 1;
+  text-shadow: 0 0 15px rgba(255, 200, 61, 0.3);
 }
+
+/* Confirmed Squads & Franchise Rosters */
+.rosters-section {
+  margin-top: 36px;
+}
+.rosters-title-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.rosters-title-bar h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 26px;
+  letter-spacing: 0.8px;
+  margin: 0;
+  color: #ffffff;
+}
+.rosters-title-bar p {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.rosters-total-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold);
+  background: rgba(255, 200, 61, 0.08);
+  border: 1px solid rgba(255, 200, 61, 0.25);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+.roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+}
+.roster-card {
+  background: linear-gradient(160deg, #101828 0%, #090e1a 100%);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.roster-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 200, 61, 0.35);
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.55);
+}
+.roster-head {
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.7);
+  border-bottom: 1px solid var(--line);
+  border-left: 4px solid var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.team-monogram {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.team-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+}
+.team-owner {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.roster-count-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--gold);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 200, 61, 0.3);
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+}
+.roster-spent-text {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Squad Capacity Bar */
+.roster-progress-track {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  position: relative;
+}
+.roster-progress-fill {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.roster-body {
+  flex: 1;
+  padding: 8px 12px;
+  min-height: 100px;
+}
+.roster-empty {
+  padding: 26px 12px;
+  text-align: center;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.roster-empty p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.roster-empty small {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+.roster-player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.roster-player {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  transition: background 0.15s ease;
+}
+.roster-player:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.roster-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.roster-price {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--gold);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.roster-footer {
+  padding: 10px 14px;
+  background: rgba(10, 16, 28, 0.6);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Unsold Section in Results */
+.unsold-section {
+  margin-top: 36px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px dashed rgba(239, 68, 68, 0.35);
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+.unsold-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.unsold-title-bar h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 22px;
+  margin: 0;
+  color: #fca5a5;
+  letter-spacing: 0.5px;
+}
+.unsold-title-bar p {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+.unsold-count-pill {
+  font-size: 10px;
+  font-weight: 800;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.unsold-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.unsold-card {
+  background: rgba(10, 16, 28, 0.85);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.unsold-badge {
+  font-size: 9px;
+  font-weight: 800;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
