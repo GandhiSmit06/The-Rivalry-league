@@ -2,6 +2,9 @@ import type { Team } from '@/lib/server/db'
 
 export const BASE_PRICE = 500
 
+export const WHEEL_SPIN_MS = 3200
+export const WHEEL_REVEAL_PAUSE_MS = 500
+
 /** The most a team may pay for one player while keeping the base price for each other open squad place. */
 export function maxBidFor(team: Pick<Team, 'purse' | 'players'>, maxSquadSize: number): number {
   const openSlots = maxSquadSize - team.players

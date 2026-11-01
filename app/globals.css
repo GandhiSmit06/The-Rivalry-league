@@ -935,6 +935,9 @@ select.season-chip { appearance: none; outline: none; cursor: pointer; }
   box-shadow: var(--shadow-lg); animation: toast-in 0.25s ease; text-align: center;
 }
 @media (min-width: 900px) { .toast { bottom: 28px; } }
+.spectator-spin { display: grid; justify-items: center; gap: 8px; }
+.spectator-spin p { color: var(--muted); font-size: 14px; }
+
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 .desktop-only { display: none; }

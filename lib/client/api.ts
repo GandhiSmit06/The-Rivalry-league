@@ -83,6 +83,15 @@ export const apiAuth = {
     })
 }
 
+export type LiveSpin = {
+  id: number
+  poolIds: number[]
+  landIndex: number
+  unsoldRound: boolean
+  elapsedMs: number
+  durationMs: number
+}
+
 export type OwnerDetails = { teamName: string; ownerName: string; loginId: string; password: string }
 
 export const apiOwner = {
@@ -178,6 +187,7 @@ export const apiAuction = {
       leader: Team | null
       teams: Team[]
       players: Player[]
+      spin: LiveSpin | null
     }>('/api/auction'),
   spin: (scope: 'auto' | 'upcoming' | 'unsold' | 'all' = 'auto') =>
     request<{

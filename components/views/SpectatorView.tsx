@@ -3,6 +3,8 @@
 import { Lock, Gavel } from 'lucide-react'
 import type { Player, Team } from '@/lib/server/db'
 import { TeamBadge } from '@/components/common/TeamBadge'
+import { LiveSpinWheel } from '@/components/common/SpinWheel'
+import type { LiveSpin } from '@/lib/client/api'
 import { maxBidFor } from '@/lib/shared/rules'
 
 const OWNER_INCREMENTS = [100, 250, 500, 1000]
@@ -14,6 +16,7 @@ export function SpectatorView({
   current,
   bid,
   leader,
+  liveSpin,
   maxSquadSize,
   ownerTeam,
   onOwnerBid,
@@ -24,6 +27,7 @@ export function SpectatorView({
   current: Player | null
   bid: number
   leader: Team | null
+  liveSpin: LiveSpin | null
   maxSquadSize: number
   ownerTeam: Team | null
   onOwnerBid: (increment: number) => void
@@ -53,7 +57,12 @@ export function SpectatorView({
       </div>
 
       <section className="spectator-stage">
-        {current ? (
+        {liveSpin ? (
+          <div className="spectator-spin">
+            <LiveSpinWheel key={liveSpin.id} spin={liveSpin} players={players} />
+            <p>Drawing the next player…</p>
+          </div>
+        ) : current ? (
           <>
             <span className="spectator-num">PLAYER #{current.number}</span>
             <h3 className="spectator-name">{current.name}</h3>

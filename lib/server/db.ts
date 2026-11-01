@@ -62,6 +62,7 @@ export type AuctionState = {
   leaderTeamId: string | null
   leaderTeamName: string | null
   lastUpdated: string
+  spin?: { startedAt: number; poolIds: number[]; landIndex: number; unsoldRound: boolean } // the latest wheel draw
 }
 
 export type DatabaseSchema = {

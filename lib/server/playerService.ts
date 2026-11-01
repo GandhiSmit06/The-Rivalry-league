@@ -122,6 +122,7 @@ export async function deletePlayer(id: number): Promise<{ success: boolean; mess
     db.auctionState.currentBid = 0
     db.auctionState.leaderTeamId = null
     db.auctionState.leaderTeamName = null
+    delete db.auctionState.spin
   }
 
   await writeDb(db)

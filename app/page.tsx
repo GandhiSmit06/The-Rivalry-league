@@ -10,6 +10,7 @@ import {
   apiAuction,
   apiMatches,
   apiOwner,
+  type LiveSpin,
   type OwnerDetails,
   getAuthToken,
   getOwnerTeamId,
@@ -24,7 +25,8 @@ import { Toast } from '@/components/common/Toast'
 
 // Views
 import { HomeView } from '@/components/views/HomeView'
-import { AuctionView, WHEEL_SPIN_MS, type WheelScope } from '@/components/views/AuctionView'
+import { AuctionView, type WheelScope } from '@/components/views/AuctionView'
+import { WHEEL_REVEAL_PAUSE_MS, WHEEL_SPIN_MS } from '@/lib/shared/rules'
 import { SpectatorView } from '@/components/views/SpectatorView'
 import { TeamsView } from '@/components/views/TeamsView'
 import { PlayersView } from '@/components/views/PlayersView'
@@ -56,6 +58,7 @@ export default function Page() {
   const [leader, setLeader] = useState<Team | null>(null)
   const [isSpinning, setIsSpinning] = useState(false)
   const [drawnPlayerId, setDrawnPlayerId] = useState<number | null>(null)
+  const [liveSpin, setLiveSpin] = useState<LiveSpin | null>(null)
   const [isMuted, setIsMuted] = useState(false)
   const [toast, setToast] = useState('')
   const [search, setSearch] = useState('')
@@ -101,6 +104,7 @@ export default function Page() {
 
   const toastTimer = useRef<number | undefined>(undefined)
   const lastSync = useRef('')
+  const lastAuctionSync = useRef('')
 
   const notify = (msg: string) => {
     setToast(msg)
@@ -109,29 +113,43 @@ export default function Page() {
   }
 
   // Load and synchronize state from backend
+  const loadAuction = useCallback(async () => {
+    try {
+      const { spin, ...auctionData } = await apiAuction.getState()
+      if (!auctionData.success) return
+
+      const incoming = spin ?? null
+      setLiveSpin(prev => (prev?.id === incoming?.id ? prev : incoming))
+
+      // Skip re-render (and clobbering of in-progress inputs) when nothing changed
+      const signature = JSON.stringify(auctionData)
+      if (signature === lastAuctionSync.current) return
+      lastAuctionSync.current = signature
+
+      setPlayers(auctionData.players || [])
+      setTeams(auctionData.teams || [])
+      setCurrent(auctionData.current || null)
+      setBid(auctionData.auctionState?.currentBid || 0)
+      setLeader(auctionData.leader || null)
+      if (auctionData.current) {
+        setAwardPrice(auctionData.auctionState?.currentBid || auctionData.current.base || 500)
+      }
+    } catch (e) {
+      console.error('Failed to sync the auction:', e)
+    }
+  }, [])
+
   const loadState = useCallback(async () => {
     try {
-      const [auctionData, matchData, leagueData] = await Promise.all([
-        apiAuction.getState(),
+      const [, matchData, leagueData] = await Promise.all([
+        loadAuction(),
         apiMatches.getAll(),
         apiLeague.getSettings()
       ])
 
-      // Skip re-render (and clobbering of in-progress inputs) when nothing changed
-      const signature = JSON.stringify([auctionData, matchData, leagueData])
+      const signature = JSON.stringify([matchData, leagueData])
       if (signature === lastSync.current) return
       lastSync.current = signature
-
-      if (auctionData.success) {
-        setPlayers(auctionData.players || [])
-        setTeams(auctionData.teams || [])
-        setCurrent(auctionData.current || null)
-        setBid(auctionData.auctionState?.currentBid || 0)
-        setLeader(auctionData.leader || null)
-        if (auctionData.current) {
-          setAwardPrice(auctionData.auctionState?.currentBid || auctionData.current.base || 500)
-        }
-      }
 
       if (matchData.success) {
         setMatches(matchData.matches || [])
@@ -146,7 +164,7 @@ export default function Page() {
     } catch (e) {
       console.error('Failed to sync backend state:', e)
     }
-  }, [])
+  }, [loadAuction])
 
   useEffect(() => {
     loadState()
@@ -170,12 +188,22 @@ export default function Page() {
     addMatchModalOpen || directSellModalOpen || !!budgetModalTeam || !!tossModalMatch || !!resultModalMatch || !!ownerLoginTeam
 
   // Live auto-sync so a second screen (projector / spectators) follows the auction
+  const watchingAuction = page === 'auction' && !isAuctioneer
+  const auctionSyncMs = liveSpin ? 700 : current ? 2000 : watchingAuction ? 1500 : 4000 // catches a spin as it starts
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (!document.hidden && !anyModalOpen && !isSpinning) loadAuction()
+    }, auctionSyncMs)
+    return () => window.clearInterval(id)
+  }, [loadAuction, anyModalOpen, isSpinning, auctionSyncMs])
+
   useEffect(() => {
     const id = window.setInterval(() => {
       if (!document.hidden && !anyModalOpen && !isSpinning) loadState()
-    }, current ? 2000 : 4000) // bids need to reach every screen quickly
+    }, 6000)
     return () => window.clearInterval(id)
-  }, [loadState, anyModalOpen, isSpinning, !!current]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadState, anyModalOpen, isSpinning])
 
   // Auctioneer Gatekeeper Check
   const guardAuctioneer = (action: () => void) => {
@@ -420,7 +448,7 @@ export default function Page() {
               : `Player #${data.player.number} (${data.player.name}) drawn on the block!`
           )
           finish()
-        }, WHEEL_SPIN_MS + 500)
+        }, WHEEL_SPIN_MS + WHEEL_REVEAL_PAUSE_MS)
       } catch {
         notify('Failed to draw from wheel')
         finish()
@@ -938,6 +966,7 @@ export default function Page() {
             current={current}
             bid={bid}
             leader={leader}
+            liveSpin={liveSpin}
             maxSquadSize={maxSquadSize}
             ownerTeam={ownerTeam}
             onOwnerBid={handleOwnerBid}
