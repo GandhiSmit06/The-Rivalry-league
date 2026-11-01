@@ -25,15 +25,25 @@ export async function spinWheel(): Promise<{
   player?: Player
   auctionState?: AuctionState
   message: string
+  isUnsoldRound?: boolean
 }> {
   const db = await readDb()
   const upcoming = db.players.filter(p => p.status === 'Upcoming')
+  const unsold = db.players.filter(p => p.status === 'Unsold')
 
-  if (!upcoming.length) {
-    return { success: false, message: 'No upcoming players in pool to draw' }
+  let candidatePool = upcoming
+  let isUnsoldRound = false
+
+  if (candidatePool.length === 0) {
+    if (unsold.length > 0) {
+      candidatePool = unsold
+      isUnsoldRound = true
+    } else {
+      return { success: false, message: 'All players processed! No upcoming or unsold players remaining in pool.' }
+    }
   }
 
-  const randomPlayer = upcoming[Math.floor(Math.random() * upcoming.length)]
+  const randomPlayer = candidatePool[Math.floor(Math.random() * candidatePool.length)]
   db.auctionState = {
     currentPlayerId: randomPlayer.id,
     currentBid: randomPlayer.base || 500,
@@ -45,9 +55,35 @@ export async function spinWheel(): Promise<{
   await writeDb(db)
   return {
     success: true,
-    message: `Player #${randomPlayer.number} (${randomPlayer.name}) drawn by Auctioneer`,
+    message: isUnsoldRound
+      ? `[RE-AUCTION ROUND] Unsold Player #${randomPlayer.number} (${randomPlayer.name}) drawn on the block!`
+      : `Player #${randomPlayer.number} (${randomPlayer.name}) drawn by Auctioneer`,
     player: randomPlayer,
-    auctionState: db.auctionState
+    auctionState: db.auctionState,
+    isUnsoldRound
+  }
+}
+
+export async function reopenAllUnsold(): Promise<{
+  success: boolean
+  message: string
+  players: Player[]
+}> {
+  const db = await readDb()
+  const unsold = db.players.filter(p => p.status === 'Unsold')
+  if (!unsold.length) {
+    return { success: false, message: 'No unsold players to restore', players: db.players }
+  }
+
+  unsold.forEach(p => {
+    p.status = 'Upcoming'
+  })
+
+  await writeDb(db)
+  return {
+    success: true,
+    message: `Restored ${unsold.length} unsold player(s) back into the upcoming pool`,
+    players: db.players
   }
 }
 

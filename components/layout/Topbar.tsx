@@ -30,6 +30,7 @@ export function Topbar({
   setPage,
   leagueName,
   season,
+  onUpdateSeason,
   maxSquadSize,
   onUpdateSquadLimit,
   isAuctioneer,
@@ -43,6 +44,7 @@ export function Topbar({
   setPage: (p: string) => void
   leagueName: string
   season: string
+  onUpdateSeason: (season: string) => void
   maxSquadSize: number
   onUpdateSquadLimit: (limit: number) => void
   isAuctioneer: boolean
@@ -59,7 +61,7 @@ export function Topbar({
           <Trophy size={18} />
         </div>
         <div>
-          <b style={{ letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{leagueName || 'Sunday Premier Auction'}</b>
+          <b style={{ letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{leagueName || 'The Rivalry League'}</b>
           <small>SEASON · {season}</small>
         </div>
       </button>
@@ -82,6 +84,43 @@ export function Topbar({
       </nav>
 
       <div className="top-actions">
+        {/* Season Selector */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            background: 'rgba(15, 23, 42, 0.6)',
+            border: '1px solid var(--line)',
+            padding: '5px 10px',
+            borderRadius: '8px',
+            fontSize: '11px'
+          }}
+          title="Active Tournament Season"
+        >
+          <Trophy size={12} style={{ color: 'var(--gold)' }} />
+          <span style={{ color: 'var(--muted)', fontSize: '10px' }}>Season:</span>
+          <select
+            value={season}
+            onChange={e => onUpdateSeason(e.target.value)}
+            style={{
+              background: 'none',
+              border: 0,
+              color: 'var(--gold)',
+              fontWeight: 800,
+              fontSize: '11px',
+              cursor: 'pointer',
+              outline: 'none'
+            }}
+          >
+            {['01', '02', '03', '04', '05', '06', '07'].map(s => (
+              <option key={s} value={s} style={{ background: '#0e1626', color: '#fff' }}>
+                Season {s}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Squad Limit Target Control */}
         <div
           style={{
@@ -94,6 +133,7 @@ export function Topbar({
             borderRadius: '8px',
             fontSize: '11px'
           }}
+          title="Max Players per Franchise for this Season"
         >
           <Users size={12} style={{ color: 'var(--gold)' }} />
           <span style={{ color: 'var(--muted)', fontSize: '10px' }}>Squad:</span>

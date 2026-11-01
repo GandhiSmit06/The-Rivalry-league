@@ -36,7 +36,8 @@ export function AuctionView({
   onAdjustBudget,
   onUpdateSquadLimit,
   onUnlock,
-  onDirectSell
+  onDirectSell,
+  onReopenAllUnsold
 }: {
   players: Player[]
   teams: Team[]
@@ -62,6 +63,7 @@ export function AuctionView({
   onUpdateSquadLimit: (limit: number) => void
   onUnlock: () => void
   onDirectSell: (player?: Player) => void
+  onReopenAllUnsold?: () => void
 }) {
   const [poolSearch, setPoolSearch] = useState('')
   const [wheelAngle, setWheelAngle] = useState(0)
@@ -70,13 +72,23 @@ export function AuctionView({
     return players.filter(p => p.status === 'Upcoming')
   }, [players])
 
-  const filteredUpcoming = useMemo(() => {
-    if (!poolSearch.trim()) return upcoming
+  const unsoldPlayers = useMemo(() => {
+    return players.filter(p => p.status === 'Unsold')
+  }, [players])
+
+  // When initial upcoming queue finishes, automatically transition wheel to Unsold players!
+  const isUnsoldRound = upcoming.length === 0 && unsoldPlayers.length > 0
+  const activeWheelPlayers = isUnsoldRound ? unsoldPlayers : upcoming
+  const N = activeWheelPlayers.length
+
+  const filteredPool = useMemo(() => {
+    const source = isUnsoldRound ? unsoldPlayers : upcoming
+    if (!poolSearch.trim()) return source
     const q = poolSearch.toLowerCase().replace('#', '').trim()
-    return upcoming.filter(
+    return source.filter(
       p => p.name.toLowerCase().includes(q) || String(p.number || '').includes(q)
     )
-  }, [upcoming, poolSearch])
+  }, [isUnsoldRound, upcoming, unsoldPlayers, poolSearch])
 
   // Realistic Casino / Tournament Wheel Spin Rotation Physics
   useEffect(() => {
@@ -85,8 +97,6 @@ export function AuctionView({
       setWheelAngle(prev => prev + extraDegrees)
     }
   }, [spinning])
-
-  const N = upcoming.length
 
   const WEDGE_COLORS = [
     '#111c30', // Deep Navy
@@ -99,7 +109,7 @@ export function AuctionView({
     '#2e2410'  // Bronze Gold
   ]
 
-  // Generate SVG Pie Slices with Radial Labels
+  // Generate SVG Pie Slices with Radial Labels for active players (upcoming or unsold round)
   const wedges = useMemo(() => {
     if (N === 0) return []
     const cx = 160
@@ -107,7 +117,7 @@ export function AuctionView({
     const r = 146
     const step = 360 / N
 
-    return upcoming.map((p, i) => {
+    return activeWheelPlayers.map((p, i) => {
       const startAngleDeg = i * step - 90
       const endAngleDeg = (i + 1) * step - 90
       const midAngleDeg = (i + 0.5) * step - 90
@@ -137,14 +147,14 @@ export function AuctionView({
         id: p.id,
         number: p.number,
         name: p.name,
-        color: WEDGE_COLORS[i % WEDGE_COLORS.length],
+        color: isUnsoldRound ? (i % 2 === 0 ? '#3b1219' : '#1e142b') : WEDGE_COLORS[i % WEDGE_COLORS.length],
         pathData,
         tx: tx.toFixed(2),
         ty: ty.toFixed(2),
         textRot: textRot.toFixed(2)
       }
     })
-  }, [upcoming, N])
+  }, [activeWheelPlayers, N, isUnsoldRound])
 
   const rimStuds = useMemo(() => {
     const cx = 160
@@ -204,11 +214,31 @@ export function AuctionView({
         {/* Left Pool Queue with dedicated, spacious player cards */}
         <aside className="pool-card">
           <div className="card-label">
-            <span>PLAYER POOL</span>
-            <b>{upcoming.length} UPCOMING</b>
+            <span>{isUnsoldRound ? 'RE-AUCTION POOL' : 'PLAYER POOL'}</span>
+            <b style={isUnsoldRound ? { color: '#f87171' } : undefined}>
+              {isUnsoldRound ? `${unsoldPlayers.length} UNSOLD` : `${upcoming.length} UPCOMING`}
+            </b>
           </div>
 
-          <div style={{ margin: '10px 0 6px', position: 'relative' }}>
+          {isUnsoldRound && onReopenAllUnsold && (
+            <button
+              className="ghost-btn"
+              onClick={onReopenAllUnsold}
+              style={{
+                width: '100%',
+                padding: '5px 8px',
+                fontSize: '10px',
+                color: 'var(--gold)',
+                borderColor: 'rgba(255, 200, 61, 0.35)',
+                margin: '6px 0 2px'
+              }}
+              title="Reset all unsold players back to Upcoming pool"
+            >
+              ↺ Reset All Unsold to Upcoming
+            </button>
+          )}
+
+          <div style={{ margin: '8px 0 6px', position: 'relative' }}>
             <input
               type="text"
               placeholder="Search by name or #..."
@@ -229,19 +259,23 @@ export function AuctionView({
           </div>
 
           <div className="pool-list" style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
-            {filteredUpcoming.length === 0 ? (
+            {filteredPool.length === 0 ? (
               <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
                 <p style={{ margin: '0 0 12px' }}>
-                  {upcoming.length === 0 ? 'No upcoming players in pool.' : 'No matching players found.'}
+                  {N === 0
+                    ? players.length === 0
+                      ? 'No players in tournament pool.'
+                      : 'All players processed.'
+                    : 'No matching players found.'}
                 </p>
-                {upcoming.length === 0 && (
+                {players.length === 0 && (
                   <button className="primary-btn" style={{ padding: '8px 14px', fontSize: '11px' }} onClick={onAddPlayer}>
                     <Plus size={14} /> Add Player (₹500 Base)
                   </button>
                 )}
               </div>
             ) : (
-              filteredUpcoming.map(p => {
+              filteredPool.map(p => {
                 const isSelected = current?.id === p.id
                 return (
                   <div
@@ -323,8 +357,35 @@ export function AuctionView({
         <section className="stage">
           <div className="stage-top">
             <span>AUCTION BLOCK</span>
-            <span className="draw-filter">{upcoming.length} REMAINING</span>
+            {isUnsoldRound ? (
+              <span className="draw-filter" style={{ color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)' }}>
+                🔥 RE-AUCTION: {unsoldPlayers.length} UNSOLD
+              </span>
+            ) : (
+              <span className="draw-filter">{upcoming.length} REMAINING</span>
+            )}
           </div>
+
+          {isUnsoldRound && (
+            <div style={{
+              background: 'linear-gradient(90deg, rgba(220, 38, 38, 0.2), rgba(217, 119, 6, 0.2))',
+              border: '1px solid rgba(239, 68, 68, 0.5)',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              marginBottom: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              color: '#fca5a5',
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.5px'
+            }}>
+              <Shuffle size={13} style={{ color: '#fbbf24' }} />
+              <span>ROUND 2: RE-AUCTIONING UNSOLD PLAYERS ({unsoldPlayers.length} IN POOL)</span>
+            </div>
+          )}
 
           <div className={spinning ? 'spinner spinning' : 'spinner'}>
             <div
@@ -443,13 +504,18 @@ export function AuctionView({
                   </>
                 ) : current ? (
                   <>
-                    <span className="center-label">DRAWN</span>
+                    <span className="center-label">{isUnsoldRound ? 'RE-AUCTION' : 'DRAWN'}</span>
                     <span className="center-num">#{current.number}</span>
                   </>
                 ) : N === 0 ? (
                   <>
                     <Shuffle size={18} style={{ opacity: 0.35 }} />
-                    <small style={{ color: 'var(--muted)' }}>EMPTY</small>
+                    <small style={{ color: 'var(--muted)' }}>ALL SOLD</small>
+                  </>
+                ) : isUnsoldRound ? (
+                  <>
+                    <Shuffle size={20} style={{ color: '#fbbf24' }} />
+                    <small style={{ color: '#fca5a5' }}>RE-SPIN ({N})</small>
                   </>
                 ) : (
                   <>
@@ -472,7 +538,9 @@ export function AuctionView({
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <span className="spotlight-num-badge">PLAYER #{current.number}</span>
-                  <span className="status upcoming">ACTIVE NOMINATION</span>
+                  <span className={current.status === 'Unsold' ? 'status unsold' : 'status upcoming'}>
+                    {current.status === 'Unsold' ? 'RE-AUCTION NOMINATION' : 'ACTIVE NOMINATION'}
+                  </span>
                 </div>
                 <h3>{current.name}</h3>
               </div>
@@ -483,12 +551,22 @@ export function AuctionView({
             </div>
           ) : (
             <div className="empty-focus">
-              <span>{players.length === 0 ? 'NO PLAYERS REGISTERED' : upcoming.length === 0 ? 'ALL PLAYERS PROCESSED' : 'SPIN OR NOMINATE PLAYER'}</span>
+              <span>
+                {players.length === 0
+                  ? 'NO PLAYERS REGISTERED'
+                  : N === 0
+                  ? 'AUCTION COMPLETED · ALL PLAYERS SOLD!'
+                  : isUnsoldRound
+                  ? `RE-AUCTION ROUND: ${unsoldPlayers.length} UNSOLD PLAYERS`
+                  : 'SPIN OR NOMINATE PLAYER'}
+              </span>
               <p>
                 {players.length === 0
                   ? 'Add players to your league pool to begin (default base ₹500).'
-                  : upcoming.length === 0
-                  ? 'All players have been auctioned. Review results on the Results tab.'
+                  : N === 0
+                  ? 'All registered players have been drafted into franchises! Review rosters on Results tab.'
+                  : isUnsoldRound
+                  ? 'All initial upcoming players finished. The wheel is now loaded with all Unsold players for the re-auction round!'
                   : 'Auctioneer: Spin the wheel to draw by player number or click Nominate beside any player.'}
               </p>
             </div>
@@ -497,14 +575,28 @@ export function AuctionView({
           <button
             className="spin-btn"
             onClick={spin}
-            disabled={spinning || upcoming.length === 0}
-            style={{ width: '100%', maxWidth: '320px', marginTop: '14px' }}
+            disabled={spinning || N === 0}
+            style={{
+              width: '100%',
+              maxWidth: '340px',
+              marginTop: '14px',
+              ...(isUnsoldRound
+                ? {
+                    background: 'linear-gradient(135deg, #b91c1c 0%, #ea580c 100%)',
+                    borderColor: '#fca5a5',
+                    color: '#ffffff',
+                    boxShadow: '0 0 25px rgba(239, 68, 68, 0.45)'
+                  }
+                : {})
+            }}
           >
-            <Shuffle size={16} />{' '}
+            <Shuffle size={16} className={spinning ? 'spin-icon-anim' : ''} />{' '}
             {spinning
               ? 'Selecting Random Player...'
-              : upcoming.length === 0
-              ? 'No Upcoming Players to Spin'
+              : N === 0
+              ? 'All Players Processed'
+              : isUnsoldRound
+              ? `SPIN RE-AUCTION WHEEL (${unsoldPlayers.length} UNSOLD)`
               : `SPIN THE WHEEL (${upcoming.length} IN POOL)`}
           </button>
         </section>

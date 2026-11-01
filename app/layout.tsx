@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Sunday Premier Auction',
-  description: 'Build your dream XI. Win the Sunday.',
+  title: 'The Rivalry League | Official Cricket Auction',
+  description: 'Official live auction management and player draft for The Rivalry League.',
   generator: 'v0.app',
   icons: {
     icon: [

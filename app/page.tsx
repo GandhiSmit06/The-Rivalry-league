@@ -187,6 +187,22 @@ export default function Page() {
   }
 
   // League Settings Operations
+  const handleUpdateSeason = async (newSeason: string) => {
+    guardAuctioneer(async () => {
+      setSeason(newSeason)
+      try {
+        const res = await apiLeague.updateSettings({ season: newSeason })
+        if (res.success) {
+          notify(`Active tournament set to Season ${newSeason}`)
+        }
+      } catch {
+        notify('Failed to update season')
+      } finally {
+        loadState()
+      }
+    })
+  }
+
   const handleUpdateSquadLimit = async (newLimit: number) => {
     guardAuctioneer(async () => {
       setMaxSquadSize(newLimit)
@@ -224,11 +240,30 @@ export default function Page() {
     })
   }
 
+  const handleReopenAllUnsold = async () => {
+    guardAuctioneer(async () => {
+      try {
+        const data = await apiAuction.reopenAllUnsold()
+        if (data.success) {
+          sounds.playCheer()
+          notify(data.message)
+        } else {
+          notify(data.message)
+        }
+      } catch {
+        notify('Failed to restore unsold players')
+      } finally {
+        loadState()
+      }
+    })
+  }
+
   // Auction Room Operations
   const handleSpin = () => {
     guardAuctioneer(async () => {
       const upcoming = players.filter(p => p.status === 'Upcoming')
-      if (isSpinning || !upcoming.length) return
+      const unsold = players.filter(p => p.status === 'Unsold')
+      if (isSpinning || (!upcoming.length && !unsold.length)) return
       setIsSpinning(true)
       sounds.playSpinnerTick()
       setCurrent(null)
@@ -245,7 +280,11 @@ export default function Page() {
             setAwardPrice(initialBase)
             if (teams.length > 0) setAwardTeam(teams[0].name)
             sounds.playHammer()
-            notify(`Player #${data.player.number} (${data.player.name}) drawn on the block!`)
+            notify(
+              data.isUnsoldRound
+                ? `[RE-AUCTION ROUND] Unsold Player #${data.player.number} (${data.player.name}) drawn on the block!`
+                : `Player #${data.player.number} (${data.player.name}) drawn on the block!`
+            )
           } else {
             notify(data.message)
           }
@@ -671,6 +710,7 @@ export default function Page() {
         setPage={setPage}
         leagueName={leagueName}
         season={season}
+        onUpdateSeason={handleUpdateSeason}
         maxSquadSize={maxSquadSize}
         onUpdateSquadLimit={handleUpdateSquadLimit}
         isAuctioneer={isAuctioneer}
@@ -722,6 +762,7 @@ export default function Page() {
             onUpdateSquadLimit={handleUpdateSquadLimit}
             onUnlock={() => setAuthModalOpen(true)}
             onDirectSell={handleOpenDirectSell}
+            onReopenAllUnsold={handleReopenAllUnsold}
           />
         )}
 

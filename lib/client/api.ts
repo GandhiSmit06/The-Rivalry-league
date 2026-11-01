@@ -95,6 +95,7 @@ export const apiAuction = {
       player: Player
       auctionState: AuctionState
       message: string
+      isUnsoldRound?: boolean
     }>('/api/auction', {
       method: 'POST',
       body: JSON.stringify({ action: 'spin' })
@@ -139,6 +140,15 @@ export const apiAuction = {
     }>('/api/auction', {
       method: 'POST',
       body: JSON.stringify({ action: 'unsold' })
+    }),
+  reopenAllUnsold: () =>
+    request<{
+      success: boolean
+      message: string
+      players: Player[]
+    }>('/api/auction', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'reopen-unsold' })
     }),
   reset: () =>
     request<{

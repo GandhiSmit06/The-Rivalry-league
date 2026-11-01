@@ -33,7 +33,7 @@ export function SetupModal({
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault()
     onSave({
-      name: name.trim() || 'Sunday Premier Auction',
+      name: name.trim() || 'The Rivalry League',
       season: sea.trim() || '01',
       defaultPurse: purse || 20000,
       maxSquadSize: squad || 11

@@ -77,7 +77,7 @@ const initialData: DatabaseSchema = {
     name: 'Chief Auctioneer'
   },
   league: {
-    name: 'Sunday Premier Auction',
+    name: 'The Rivalry League',
     season: '01',
     defaultPurse: 20000,
     maxSquadSize: 5

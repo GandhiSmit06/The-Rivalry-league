@@ -39,16 +39,16 @@ export function HomeView({
         <div className="hero-orbit orbit-one" />
         <div className="hero-orbit orbit-two" />
         <div className="eyebrow">
-          <span className="live-dot" /> AUCTIONEER COMMAND CENTER
+          <span className="live-dot" /> THE RIVALRY LEAGUE · AUCTIONEER COMMAND
           <span className="season-pill">SEASON · {season}</span>
         </div>
         <h1>
-          BUILD YOUR<br />
-          <em>DREAM XI.</em>
+          THE RIVALRY LEAGUE<br />
+          <em>DREAM XI DRAFT.</em>
         </h1>
         <p className="hero-copy">
-          Tournament cricket auction operated exclusively by the Auctioneer.<br className="desktop-only" />
-          Base price ₹500 per player. Custom squad limits. Real-time franchise budgets.
+          Official tournament cricket auction operated exclusively by the Auctioneer.<br className="desktop-only" />
+          Base price ₹500 per player. Dynamic season squad limits. Real-time franchise budgets.
         </p>
         <div className="hero-actions">
           <button className="primary-btn" onClick={onStart}>

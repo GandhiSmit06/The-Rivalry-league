@@ -6,7 +6,8 @@ import {
   placeBid,
   sellPlayer,
   markUnsold,
-  resetAuction
+  resetAuction,
+  reopenAllUnsold
 } from '@/lib/server/auctionService'
 
 export async function GET() {
@@ -44,6 +45,11 @@ export async function POST(req: Request) {
 
     if (action === 'unsold') {
       const result = await markUnsold()
+      return NextResponse.json(result, { status: result.success ? 200 : 400 })
+    }
+
+    if (action === 'reopen-unsold') {
+      const result = await reopenAllUnsold()
       return NextResponse.json(result, { status: result.success ? 200 : 400 })
     }
 
