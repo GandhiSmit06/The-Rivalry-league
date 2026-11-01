@@ -1,0 +1,60 @@
+<svg width="180" height="180" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="trlShieldGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stopColor="#162238" />
+      <stop offset="65%" stopColor="#0a101d" />
+      <stop offset="100%" stopColor="#04070d" />
+    </radialGradient>
+    <linearGradient id="trlGoldRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#ffe58f" />
+      <stop offset="35%" stopColor="#d49a24" />
+      <stop offset="70%" stopColor="#fff3b0" />
+      <stop offset="100%" stopColor="#8c5807" />
+    </linearGradient>
+    <radialGradient id="trlBallGrad" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stopColor="#ff4d4f" />
+      <stop offset="50%" stopColor="#cf1322" />
+      <stop offset="100%" stopColor="#5c0011" />
+    </radialGradient>
+    <radialGradient id="trlSparkGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stopColor="#ffffff" />
+      <stop offset="40%" stopColor="#ffd666" />
+      <stop offset="80%" stopColor="#fa8c16" stopOpacity="0.8" />
+      <stop offset="100%" stopColor="#ff4d4f" stopOpacity="0" />
+    </radialGradient>
+    <linearGradient id="trlWoodA" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#ffe7ba" />
+      <stop offset="50%" stopColor="#d48806" />
+      <stop offset="100%" stopColor="#613400" />
+    </linearGradient>
+    <linearGradient id="trlWoodB" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#fff1b8" />
+      <stop offset="50%" stopColor="#d46b08" />
+      <stop offset="100%" stopColor="#381a00" />
+    </linearGradient>
+  </defs>
+
+  <rect width="120" height="120" rx="28" fill="#070c16" />
+  <circle cx="60" cy="60" r="54" fill="url(#trlShieldGrad)" stroke="url(#trlGoldRim)" strokeWidth="3" />
+  <circle cx="60" cy="60" r="49" fill="none" stroke="#ffe58f" strokeWidth="1.2" strokeDasharray="18 10 32 10" opacity="0.6" />
+
+  <!-- Crossed Bats -->
+  <g transform="translate(60,60) rotate(-42) translate(-60,-60)">
+    <rect x="57" y="10" width="6" height="24" rx="2.5" fill="#1d39c4" stroke="#85a5ff" strokeWidth="0.8" />
+    <path d="M 54.5 34 L 65.5 34 L 67 98 C 67 104 60 106 60 106 C 60 106 53 104 53 98 Z" fill="url(#trlWoodA)" stroke="#8c5807" strokeWidth="1" />
+  </g>
+  <g transform="translate(60,60) rotate(42) translate(-60,-60)">
+    <rect x="57" y="10" width="6" height="24" rx="2.5" fill="#b37feb" stroke="#d3adf7" strokeWidth="0.8" />
+    <path d="M 54.5 34 L 65.5 34 L 67 98 C 67 104 60 106 60 106 C 60 106 53 104 53 98 Z" fill="url(#trlWoodB)" stroke="#8c5807" strokeWidth="1" />
+  </g>
+
+  <!-- Central Ball -->
+  <circle cx="60" cy="60" r="16" fill="url(#trlBallGrad)" stroke="#ffd666" strokeWidth="1.5" />
+  <path d="M 46 60 C 53 53, 67 67, 74 60" fill="none" stroke="#ffffff" strokeWidth="1.8" strokeDasharray="2.5 1.8" />
+  <circle cx="60" cy="60" r="10" fill="url(#trlSparkGrad)" />
+  <path d="M 60 49 L 62 58 L 68 59 L 61 63 L 63 71 L 58 64 L 52 63 L 58 59 Z" fill="#ffffff" />
+
+  <!-- Bottom Banner -->
+  <rect x="36" y="93" width="48" height="15" rx="4" fill="#0c1220" stroke="url(#trlGoldRim)" strokeWidth="1.2" />
+  <text x="60" y="104" text-anchor="middle" fill="#ffe58f" font-family="sans-serif" font-size="10" font-weight="900" letter-spacing="1">RIVALRY</text>
+</svg>
