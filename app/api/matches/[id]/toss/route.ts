@@ -1,0 +1,17 @@
+import { NextResponse } from 'next/server'
+import { recordTossOutcome, getAllMatches } from '@/lib/server/matchService'
+
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const { tossWinner, tossDecision } = await req.json()
+    const result = await recordTossOutcome(id, tossWinner, tossDecision)
+    const matches = await getAllMatches()
+    return NextResponse.json({ ...result, matches }, { status: result.success ? 200 : 400 })
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  }
+}

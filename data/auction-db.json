@@ -1,0 +1,230 @@
+{
+  "auctioneer": {
+    "pin": "1234",
+    "name": "Chief Auctioneer"
+  },
+  "league": {
+    "name": "Sunday Premier Auction",
+    "season": "01",
+    "defaultPurse": 20000,
+    "maxSquadSize": 5
+  },
+  "teams": [
+    {
+      "id": "team_1793440146400",
+      "name": "Parshuram",
+      "short": "PA",
+      "color": "#ee2098",
+      "owner": "Shlok",
+      "purse": 20000,
+      "spent": 0,
+      "players": 0,
+      "tagline": "Ready to compete"
+    },
+    {
+      "id": "team_1793440171689",
+      "name": "Vasudev",
+      "short": "VA",
+      "color": "#22D3EE",
+      "owner": "Saumya",
+      "purse": 20000,
+      "spent": 0,
+      "players": 1,
+      "tagline": "Ready to compete"
+    },
+    {
+      "id": "team_1793440217976",
+      "name": "Krishna",
+      "short": "KR",
+      "color": "#ccee20",
+      "owner": "Krishna",
+      "purse": 20000,
+      "spent": 0,
+      "players": 0,
+      "tagline": "Ready to compete"
+    },
+    {
+      "id": "team_1793445497339",
+      "name": "Narshiha",
+      "short": "NA",
+      "color": "#182cc3",
+      "owner": "Saumya",
+      "purse": 20000,
+      "spent": 0,
+      "players": 0,
+      "tagline": "Ready to compete"
+    }
+  ],
+  "players": [
+    {
+      "id": 1793445600815,
+      "number": 1,
+      "name": "1. Jal",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "1J"
+    },
+    {
+      "id": 1793445600816,
+      "number": 2,
+      "name": "2. Dip",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "2D"
+    },
+    {
+      "id": 1793445600817,
+      "number": 3,
+      "name": "3. Smit",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "3S"
+    },
+    {
+      "id": 1793445600818,
+      "number": 4,
+      "name": "4. Tirth",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "4T"
+    },
+    {
+      "id": 1793445600819,
+      "number": 5,
+      "name": "5. Parth.L",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "5P"
+    },
+    {
+      "id": 1793445600820,
+      "number": 6,
+      "name": "6. Yash",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "6Y"
+    },
+    {
+      "id": 1793445600821,
+      "number": 7,
+      "name": "7. Shivam",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "7S"
+    },
+    {
+      "id": 1793445600822,
+      "number": 8,
+      "name": "8. Deep S",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "8D"
+    },
+    {
+      "id": 1793445600823,
+      "number": 9,
+      "name": "9. Deep B",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "9D"
+    },
+    {
+      "id": 1793445600824,
+      "number": 10,
+      "name": "10. Prem",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "1P"
+    },
+    {
+      "id": 1793445600825,
+      "number": 11,
+      "name": "11. Harshil",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "1H"
+    },
+    {
+      "id": 1793445600826,
+      "number": 12,
+      "name": "12. ⁠achal",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "1⁠"
+    },
+    {
+      "id": 1793445600827,
+      "number": 13,
+      "name": "13. ⁠parth",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "1⁠"
+    },
+    {
+      "id": 1793445600828,
+      "number": 14,
+      "name": "14. ⁠Tanish",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "1⁠"
+    },
+    {
+      "id": 1793445600829,
+      "number": 15,
+      "name": "15. Hitil",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "1H"
+    },
+    {
+      "id": 1793445600830,
+      "number": 16,
+      "name": "16. Kirtan",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "1K"
+    },
+    {
+      "id": 1793445600831,
+      "number": 17,
+      "name": "17. Sanjay",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "1S"
+    },
+    {
+      "id": 1793445600832,
+      "number": 18,
+      "name": "18. Kavya",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "1K"
+    },
+    {
+      "id": 1793445600833,
+      "number": 19,
+      "name": "19. Divy",
+      "base": 500,
+      "status": "Sold",
+      "initials": "1D",
+      "soldTo": "Vasudev",
+      "soldPrice": 0
+    },
+    {
+      "id": 1793445600834,
+      "number": 20,
+      "name": "20. ⁠Yuvraj",
+      "base": 500,
+      "status": "Upcoming",
+      "initials": "2⁠"
+    }
+  ],
+  "auctionState": {
+    "currentPlayerId": null,
+    "currentBid": 0,
+    "leaderTeamId": null,
+    "leaderTeamName": null,
+    "lastUpdated": "2026-10-31T11:33:01.235Z"
+  },
+  "matches": []
+}
