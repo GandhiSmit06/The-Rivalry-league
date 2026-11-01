@@ -22,8 +22,8 @@ export async function POST(req: Request, { params }: Ctx) {
 
   try {
     const { id } = await params
-    const { loginId, pin } = await req.json()
-    const result = await setOwnerLogin(id, loginId, pin)
+    const { loginId, pin, ownerName } = await req.json()
+    const result = await setOwnerLogin(id, loginId, pin, ownerName)
     return NextResponse.json(result, { status: result.success ? 200 : 400 })
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 })

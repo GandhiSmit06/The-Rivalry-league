@@ -23,7 +23,8 @@ function pinMatches(pin: string, stored: string): boolean {
 export async function setOwnerLogin(
   teamId: string,
   loginId: string,
-  pin: string
+  pin: string,
+  ownerName?: string
 ): Promise<{ success: boolean; message: string }> {
   const id = (loginId || '').trim().toLowerCase()
   const cleanPin = (pin || '').trim()
@@ -42,6 +43,7 @@ export async function setOwnerLogin(
   if (taken) return { success: false, message: 'That login ID is already used by another team' }
 
   db.ownerLogins = { ...db.ownerLogins, [team.id]: { loginId: id, pinHash: hashPin(cleanPin) } }
+  if (ownerName?.trim()) team.owner = ownerName.trim()
   await writeDb(db)
   return { success: true, message: `Login saved for ${team.name}` }
 }

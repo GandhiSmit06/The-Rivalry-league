@@ -221,7 +221,7 @@ export function TeamsView({
                   {isAuctioneer && (
                     <div className="team-actions">
                       <button className="ghost-btn" onClick={() => onOwnerLogin(t)}>
-                        <KeyRound size={14} /> Owner login
+                        <KeyRound size={14} /> Assign owner
                       </button>
                       <button className="danger-btn" style={{ borderRadius: 10 }} onClick={() => onDeleteTeam(t.name)}>
                         <Trash2 size={14} /> Delete

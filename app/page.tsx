@@ -280,9 +280,15 @@ export default function Page() {
     }
   }
 
-  const handleSaveOwnerLogin = async (teamId: string, loginId: string, pin: string): Promise<string | null> => {
+  const handleSaveOwnerLogin = async (
+    teamId: string,
+    ownerName: string,
+    loginId: string,
+    pin: string
+  ): Promise<string | null> => {
     try {
-      const data = await apiOwner.setLogin(teamId, loginId, pin)
+      const data = await apiOwner.setLogin(teamId, ownerName, loginId, pin)
+      if (data.success) loadState()
       return data.success ? null : data.message
     } catch {
       return 'Could not save the login'
@@ -607,6 +613,7 @@ export default function Page() {
         if (data.success) {
           notify(`Franchise "${t.name}" registered with ₹${t.purse.toLocaleString()} purse`)
           setTeamModalOpen(false)
+          if (data.team) setOwnerLoginTeam(data.team) // new teams go straight to owner setup
         } else {
           notify(data.message || 'Error creating team')
         }
