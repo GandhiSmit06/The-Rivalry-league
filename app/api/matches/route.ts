@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { serverError } from '@/lib/server/respond'
+import { reply, serverError } from '@/lib/server/respond'
 import { requireAuth } from '@/lib/server/auth/token'
 import {
   getAllMatches,
   createMatch,
-  deleteMatch,
-  generateRoundRobinSchedule
+  createKnockouts,
+  deleteMatch
 } from '@/lib/server/services/matchService'
 
 export async function GET() {
@@ -23,14 +23,12 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json()
-    if (body.action === 'generate-round-robin') {
-      const result = await generateRoundRobinSchedule()
-      return NextResponse.json(result, { status: result.success ? 200 : 400 })
+    if (body.action === 'create-knockouts') {
+      const round = body.round === 'final' ? 'final' : 'semis'
+      return reply(await createKnockouts({ round, pairings: body.pairings, date: body.date, venue: body.venue }))
     }
-
     const result = await createMatch(body)
-    const matches = await getAllMatches()
-    return NextResponse.json({ ...result, matches }, { status: result.success ? 200 : 400 })
+    return reply(result)
   } catch (err) {
     return serverError(err)
   }
@@ -47,8 +45,7 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ success: false, message: 'Match id is required' }, { status: 400 })
     }
     const result = await deleteMatch(id)
-    const matches = await getAllMatches()
-    return NextResponse.json({ ...result, matches }, { status: result.success ? 200 : 400 })
+    return reply(result)
   } catch (err) {
     return serverError(err)
   }

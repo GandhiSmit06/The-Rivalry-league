@@ -1,5 +1,5 @@
 import { readDb, writeDb, AuctionState, DatabaseSchema, DbConflictError, Player, Team } from '../db'
-import { maxBidFor, WHEEL_LEAD_MS, WHEEL_REVEAL_PAUSE_MS, WHEEL_SPIN_MS } from '@/lib/shared/rules'
+import { BID_STEPS, maxBidFor, minRaiseAfter, WHEEL_LEAD_MS, WHEEL_REVEAL_PAUSE_MS, WHEEL_SPIN_MS } from '@/lib/shared/rules'
 
 /** Gives a sold player's price and squad slot back to the team that bought them. */
 function refundSale(db: DatabaseSchema, player: Player) {
@@ -12,15 +12,21 @@ function refundSale(db: DatabaseSchema, player: Player) {
   team.players = Math.max(0, team.players - 1)
 }
 
-export async function getAuctionSnapshot(): Promise<{
+export type AuctionSnapshot = {
   auctionState: AuctionState
   current: Player | null
   leader: Team | null
   teams: Team[]
   players: Player[]
   spin: LiveSpin | null
-}> {
-  const db = await readDb()
+}
+
+export async function getAuctionSnapshot(): Promise<AuctionSnapshot> {
+  return auctionSnapshot(await readDb())
+}
+
+/** What every screen sees of the auction right now. */
+export function auctionSnapshot(db: DatabaseSchema): AuctionSnapshot {
   const { spin, ...state } = db.auctionState
 
   // While the wheel turns, nobody's screen shows who it will stop on
@@ -205,11 +211,14 @@ export async function placeBid(
   amount: number,
   increment?: number
 ): Promise<BidResult> {
-  for (let attempt = 0; attempt < 4; attempt++) {
+  // Bids tapped at the same moment collide on save; each retry reads the newer price and tries again,
+  // after a short random wait so the colliding requests don't keep landing together
+  for (let attempt = 0; attempt < 10; attempt++) {
     try {
       return await tryBid(teamName, amount, increment)
     } catch (err) {
       if (!(err instanceof DbConflictError)) throw err
+      await new Promise(r => setTimeout(r, 10 + Math.random() * 40 * (attempt + 1)))
     }
   }
   return { success: false, message: 'Too many bids at once - please bid again' }
@@ -242,11 +251,17 @@ async function tryBid(teamName: string, amount: number, increment?: number): Pro
     return { success: false, message: `${team.name} already holds the top bid` }
   }
 
-  const bidAmount = increment ? (db.auctionState.currentBid || 0) + increment : Number(amount)
+  const currentBid = db.auctionState.currentBid || 0
+  const minRaise = db.auctionState.minRaise || BID_STEPS[0]
+  // Owners bid by button, so the closed smaller steps apply; the superadmin's typed amount stays free
+  if (increment && increment < minRaise) {
+    return { success: false, message: `Minimum raise is now ₹${minRaise.toLocaleString()}` }
+  }
+
+  const bidAmount = increment ? currentBid + increment : Number(amount)
   if (!Number.isFinite(bidAmount) || bidAmount <= 0) {
     return { success: false, message: 'Please enter a valid bid amount' }
   }
-  const currentBid = db.auctionState.currentBid || 0
   if (db.auctionState.leaderTeamId ? bidAmount <= currentBid : bidAmount < currentBid) {
     return {
       success: false,
@@ -265,6 +280,7 @@ async function tryBid(teamName: string, amount: number, increment?: number): Pro
     return { success: false, message: `${team.name} can bid up to ₹${maxBid.toLocaleString()} and still fill its squad` }
   }
 
+  db.auctionState.minRaise = minRaiseAfter(db.auctionState.minRaise, bidAmount - currentBid)
   db.auctionState.currentBid = bidAmount
   db.auctionState.leaderTeamId = team.id
   db.auctionState.leaderTeamName = team.name

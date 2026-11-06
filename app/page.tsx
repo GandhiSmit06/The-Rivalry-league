@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import type { Player, Team, Match } from '@/lib/server/db'
+import type { ClientState } from '@/lib/server/clientState'
 import {
   apiAuth,
   apiLeague,
@@ -11,6 +12,8 @@ import {
   apiAuction,
   apiMatches,
   apiOwner,
+  apiState,
+  onServerState,
   scheduleSpin,
   type ScheduledSpin,
   type OwnerDetails,
@@ -31,13 +34,15 @@ import { WinBanner } from '@/components/common/WinBanner'
 // Views
 import { HomeView } from '@/components/views/HomeView'
 import { AuctionView, type WheelScope } from '@/components/views/AuctionView'
-import { WHEEL_REVEAL_PAUSE_MS } from '@/lib/shared/rules'
+import { BID_STEPS, minRaiseAfter, WHEEL_REVEAL_PAUSE_MS } from '@/lib/shared/rules'
 import { SpectatorView } from '@/components/views/SpectatorView'
 import { TeamsView } from '@/components/views/TeamsView'
 import { PlayersView } from '@/components/views/PlayersView'
 import { ScheduleView } from '@/components/views/ScheduleView'
 import { ResultsView } from '@/components/views/ResultsView'
 import { StandingsView } from '@/components/views/StandingsView'
+import { KnockoutModal } from '@/components/modals/KnockoutModal'
+import type { KnockoutFormat, Pairing } from '@/lib/shared/playoffs'
 
 // Popups load the first time they open
 const AuthModal = dynamic(() => import('@/components/modals/AuthModal').then(m => m.AuthModal))
@@ -60,6 +65,7 @@ export default function Page() {
   const [matches, setMatches] = useState<Match[]>([])
   const [current, setCurrent] = useState<Player | null>(null)
   const [bid, setBid] = useState(0)
+  const [minRaise, setMinRaise] = useState<number>(BID_STEPS[0])
   const [leader, setLeader] = useState<Team | null>(null)
   const [spinRequested, setSpinRequested] = useState(false)
   const [liveSpin, setLiveSpin] = useState<ScheduledSpin | null>(null)
@@ -75,6 +81,9 @@ export default function Page() {
   const [season, setSeason] = useState('01')
   const [defaultPurse, setDefaultPurse] = useState(20000)
   const [maxSquadSize, setMaxSquadSize] = useState(11)
+  const [leagueMatches, setLeagueMatches] = useState<number | null>(null)
+  const [knockout, setKnockout] = useState<KnockoutFormat>('semis')
+  const [knockoutRound, setKnockoutRound] = useState<{ round: 'semis' | 'final'; pairings: Pairing[] } | null>(null)
 
   // Auctioneer Master Auth State
   const [isAuctioneer, setIsAuctioneer] = useState(false)
@@ -120,66 +129,79 @@ export default function Page() {
     toastTimer.current = window.setTimeout(() => setToast(''), 3200)
   }
 
-  // Load and synchronize state from backend
-  const loadAuction = useCallback(async () => {
-    try {
-      const sync = ++syncsStarted.current
-      const sentAt = performance.now()
-      const { spin, ...auctionData } = await apiAuction.getState()
-      if (!auctionData.success || sync < newestSyncApplied.current) return
-      newestSyncApplied.current = sync
+  const stateRev = useRef<number | null>(null)
+  const lastStateAt = useRef(-Infinity)
 
-      const incoming = spin ? scheduleSpin(spin, sentAt) : null
-      setLiveSpin(prev => (prev?.id === incoming?.id ? prev : incoming))
+  /** Puts a fresh copy of the league on screen. */
+  const applyState = useCallback((state: ClientState, sentAt: number) => {
+    const { spin, matches: matchList, league, rev, ...auctionData } = state
+    stateRev.current = rev
+    lastStateAt.current = performance.now()
 
-      // Skip re-render (and clobbering of in-progress inputs) when nothing changed
-      const signature = JSON.stringify(auctionData)
-      if (signature === lastAuctionSync.current) return
+    const incoming = spin ? scheduleSpin(spin, sentAt) : null
+    setLiveSpin(prev => (prev?.id === incoming?.id ? prev : incoming))
+
+    // Skip re-render (and clobbering of in-progress inputs) when nothing changed
+    const signature = JSON.stringify(auctionData)
+    if (signature !== lastAuctionSync.current) {
       lastAuctionSync.current = signature
-
       setPlayers(auctionData.players || [])
       setTeams(auctionData.teams || [])
       setCurrent(auctionData.current || null)
       setBid(auctionData.auctionState?.currentBid || 0)
+      setMinRaise(auctionData.auctionState?.minRaise || BID_STEPS[0])
       setLeader(auctionData.leader || null)
       if (auctionData.current) {
         setAwardPrice(auctionData.auctionState?.currentBid || auctionData.current.base || 500)
       }
-    } catch (e) {
-      console.error('Failed to sync the auction:', e)
+    }
+
+    const rest = JSON.stringify([matchList, league])
+    if (rest !== lastSync.current) {
+      lastSync.current = rest
+      setMatches(matchList || [])
+      if (league) {
+        setLeagueName(league.name)
+        setSeason(league.season)
+        setDefaultPurse(league.defaultPurse || 20000)
+        setMaxSquadSize(league.maxSquadSize || 11)
+        setLeagueMatches(league.leagueMatches || null)
+        setKnockout(league.knockout === 'final' ? 'final' : 'semis')
+      }
     }
   }, [])
 
-  const loadState = useCallback(async () => {
+  // Load and synchronize state from backend: one request, and a few bytes when nothing changed
+  const loadAuction = useCallback(async () => {
     try {
-      const [, matchData, leagueData] = await Promise.all([
-        loadAuction(),
-        apiMatches.getAll(),
-        apiLeague.getSettings()
-      ])
-
-      const signature = JSON.stringify([matchData, leagueData])
-      if (signature === lastSync.current) return
-      lastSync.current = signature
-
-      if (matchData.success) {
-        setMatches(matchData.matches || [])
-      }
-
-      if (leagueData.success && leagueData.league) {
-        setLeagueName(leagueData.league.name)
-        setSeason(leagueData.league.season)
-        setDefaultPurse(leagueData.league.defaultPurse || 20000)
-        setMaxSquadSize(leagueData.league.maxSquadSize || 11)
-      }
+      const sync = ++syncsStarted.current
+      const sentAt = performance.now()
+      const data = await apiState.get(stateRev.current)
+      if (!data.success || sync < newestSyncApplied.current) return
+      newestSyncApplied.current = sync
+      if (data.state) applyState(data.state, sentAt)
     } catch (e) {
-      console.error('Failed to sync backend state:', e)
+      console.error('Failed to sync the league:', e)
     }
+  }, [applyState])
+
+  // A change's own answer already carried the fresh league; only ask again when it did not
+  const loadState = useCallback(async () => {
+    if (performance.now() - lastStateAt.current < 1500) return
+    await loadAuction()
   }, [loadAuction])
 
   useEffect(() => {
-    loadState()
-  }, [loadState])
+    onServerState((state, sentAt) => {
+      newestSyncApplied.current = ++syncsStarted.current // anything still in flight is older than this
+      applyState(state, sentAt)
+    })
+    return () => onServerState(null)
+  }, [applyState])
+
+  useEffect(() => {
+    loadAuction()
+  }, [loadAuction])
 
   useEffect(() => {
     if (current) {
@@ -200,7 +222,8 @@ export default function Page() {
 
   // Live auto-sync so a second screen (projector / spectators) follows the auction
   const watchingAuction = page === 'auction'
-  const auctionSyncMs = liveSpin ? 700 : current ? 2000 : watchingAuction ? 1500 : 4000 // catches a spin as it starts
+  // Fast while a player is up for bids, so every owner sees a rival's bid within a second
+  const auctionSyncMs = liveSpin || current ? 700 : watchingAuction ? 1500 : 4000
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -208,13 +231,6 @@ export default function Page() {
     }, auctionSyncMs)
     return () => window.clearInterval(id)
   }, [loadAuction, anyModalOpen, spinRequested, auctionSyncMs])
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      if (!document.hidden && !anyModalOpen && !spinRequested) loadState()
-    }, 6000)
-    return () => window.clearInterval(id)
-  }, [loadState, anyModalOpen, spinRequested])
 
   // Ask for the drawn player as soon as the spin is over, so no screen waits for its next sync
   useEffect(() => {
@@ -248,13 +264,13 @@ export default function Page() {
   }, [liveSpin, current])
 
   // Auctioneer Gatekeeper Check
-  const guardAuctioneer = (action: () => void) => {
+  const guardAuctioneer = <T,>(action: () => T): T | undefined => {
     if (!isAuctioneer) {
       setAuthModalOpen(true)
       notify('Superadmin sign-in required')
       return
     }
-    action()
+    return action()
   }
 
   // Restore a still-valid session on load; fall back to spectator when it expires
@@ -316,13 +332,17 @@ export default function Page() {
     notify('Signed out')
   }
 
+  const ownerBidInFlight = useRef(false)
   const handleOwnerBid = async (increment: number) => {
+    if (ownerBidInFlight.current) return // a double tap must not send a second bid
+    ownerBidInFlight.current = true
     try {
       const data = await apiOwner.bid(increment)
       notify(data.message)
     } catch {
       notify('Failed to place bid')
     } finally {
+      ownerBidInFlight.current = false
       loadState()
     }
   }
@@ -416,6 +436,8 @@ export default function Page() {
     season: string
     defaultPurse: number
     maxSquadSize: number
+    leagueMatches?: number
+    knockout?: KnockoutFormat
   }) => {
     guardAuctioneer(async () => {
       try {
@@ -482,6 +504,7 @@ export default function Page() {
           setCurrent(data.player)
           const initialBase = data.player.base || 500
           setBid(initialBase)
+          setMinRaise(BID_STEPS[0])
           setAwardPrice(initialBase)
           if (teams.length > 0) setAwardTeam(teams[0].name)
           notify(`Player #${data.player.number} (${data.player.name}) on the block at ₹${initialBase}`)
@@ -504,12 +527,11 @@ export default function Page() {
         return
       }
 
-      let increment = customIncrement
-      if (!increment) {
-        if (bid < 1000) increment = 100
-        else if (bid < 5000) increment = 250
-        else if (bid < 20000) increment = 500
-        else increment = 1000
+      // Smaller raises close once a bigger one has been used on this player
+      const increment = customIncrement || minRaise
+      if (increment < minRaise) {
+        notify(`Minimum raise is now ₹${minRaise.toLocaleString()}`)
+        return
       }
 
       const nextBid = bid + increment
@@ -522,6 +544,7 @@ export default function Page() {
         const data = await apiAuction.bid(team.name, nextBid)
         if (data.success) {
           setBid(nextBid)
+          setMinRaise(data.auctionState?.minRaise || minRaiseAfter(minRaise, increment))
           setLeader(team)
           setAwardPrice(nextBid)
           setAwardTeam(team.name)
@@ -713,7 +736,7 @@ export default function Page() {
     name: string
     base: number
   }) => {
-    guardAuctioneer(async () => {
+    return guardAuctioneer(async () => {
       try {
         const data = await apiPlayers.create(p)
         if (data.success) {
@@ -731,11 +754,11 @@ export default function Page() {
   }
 
   const handleBulkImport = async (list: ParsedPlayer[]) => {
-    guardAuctioneer(async () => {
+    return guardAuctioneer(async () => {
       try {
         const data = await apiPlayers.bulkImport(list)
         if (data.success) {
-          notify(`Added ${list.length} player${list.length === 1 ? '' : 's'}`)
+          notify(data.message)
           setBulkModalOpen(false)
         } else {
           notify((data as { message?: string }).message || 'Could not import players')
@@ -782,13 +805,21 @@ export default function Page() {
     teamB: string
     date: string
     venue?: string
-    stage?: string
+    leagueMatches?: number // asked in the form the first time, when League Settings has no count yet
   }) => {
-    guardAuctioneer(async () => {
+    return guardAuctioneer(async () => {
       try {
-        const data = await apiMatches.create(m)
+        const { leagueMatches: total, ...fixture } = m
+        if (total) {
+          const set = await apiLeague.updateSettings({ leagueMatches: total })
+          if (!set.success) {
+            notify(set.message || 'Could not save the number of league matches')
+            return
+          }
+        }
+        const data = await apiMatches.create(fixture)
         if (data.success) {
-          notify(`Match fixture scheduled: ${m.teamA} vs ${m.teamB}`)
+          notify(data.message || `Match fixture scheduled: ${m.teamA} vs ${m.teamB}`)
           setAddMatchModalOpen(false)
         } else {
           notify(data.message || 'Could not schedule match')
@@ -801,16 +832,14 @@ export default function Page() {
     })
   }
 
-  const handleGenerateRoundRobin = async () => {
-    guardAuctioneer(async () => {
-      if (matches.length > 0 && !confirm(`Replace all ${matches.length} fixtures? Tosses and results entered so far will be lost.`)) {
-        return
-      }
+  const handleCreateKnockouts = async (data: { round: 'semis' | 'final'; pairings: Pairing[]; date: string; venue: string }) => {
+    return guardAuctioneer(async () => {
       try {
-        const data = await apiMatches.generateRoundRobin()
-        notify(data.message)
+        const res = await apiMatches.createKnockouts(data)
+        notify(res.message)
+        if (res.success) setKnockoutRound(null)
       } catch {
-        notify('Failed to generate tournament fixtures')
+        notify('Failed to create the knockout matches')
       } finally {
         loadState()
       }
@@ -961,6 +990,7 @@ export default function Page() {
             teams={teams}
             current={current}
             bid={bid}
+            minRaise={minRaise}
             leader={leader}
             liveSpin={liveSpin}
             maxSquadSize={maxSquadSize}
@@ -976,6 +1006,7 @@ export default function Page() {
             teams={teams}
             current={current}
             bid={bid}
+            minRaise={minRaise}
             leader={leader}
             spinRequested={spinRequested}
             liveSpin={liveSpin}
@@ -1061,15 +1092,19 @@ export default function Page() {
             setFilter={setScheduleFilter}
             isAuctioneer={isAuctioneer}
             onAddMatch={() => guardAuctioneer(() => setAddMatchModalOpen(true))}
-            onGenerateRoundRobin={handleGenerateRoundRobin}
             onDeleteMatch={handleDeleteMatch}
             onOpenToss={m => guardAuctioneer(() => setTossModalMatch(m))}
             onOpenResult={m => guardAuctioneer(() => setResultModalMatch(m))}
             onQuickToss={handleQuickToss}
+            leagueMatches={leagueMatches}
+            knockout={knockout}
+            onCreateKnockouts={(round, pairings) => guardAuctioneer(() => setKnockoutRound({ round, pairings }))}
           />
         )}
 
-        {page === 'standings' && <StandingsView teams={teams} matches={matches} />}
+        {page === 'standings' && (
+          <StandingsView teams={teams} matches={matches} leagueMatches={leagueMatches} knockout={knockout} />
+        )}
 
         {page === 'results' && (
           <ResultsView
@@ -1142,8 +1177,19 @@ export default function Page() {
       {addMatchModalOpen && (
         <AddMatchModal
           teams={teams}
+          matches={matches}
+          leagueMatches={leagueMatches}
           onClose={() => setAddMatchModalOpen(false)}
           onAdd={handleAddMatch}
+        />
+      )}
+
+      {knockoutRound && (
+        <KnockoutModal
+          round={knockoutRound.round}
+          pairings={knockoutRound.pairings}
+          onClose={() => setKnockoutRound(null)}
+          onCreate={handleCreateKnockouts}
         />
       )}
 
@@ -1177,6 +1223,8 @@ export default function Page() {
           season={season}
           defaultPurse={defaultPurse}
           maxSquadSize={maxSquadSize}
+          leagueMatches={leagueMatches}
+          knockout={knockout}
           onClose={() => setSetupOpen(false)}
           onSave={handleSaveLeagueSettings}
           onChangePin={handleChangePin}
